@@ -162,8 +162,9 @@ sub getSraFastq {
 
 	my $platform = $info->{platform};
 	my $library  = $info->{library};
-
-	my $url  = "https://trace.ncbi.nlm.nih.gov/Traces/sra/sra.cgi?cmd=dload&run_list=$run_acc&format=fastq";
+	
+	my $url = "https://trace.ncbi.nlm.nih.gov/Traces/sra-reads-be/fastq?acc=$run_acc";
+	#my $url  = "https://trace.ncbi.nlm.nih.gov/Traces/sra/sra.cgi?cmd=dload&run_list=$run_acc&format=fastq";
 
 	print STDERR "Downloading $url...\n";
 	my $cmd = ($Download_tool =~ /wget/)?"$curl -O $OUTDIR/sra2fastq_temp/$run_acc.fastq.gz \"$url\"":"$curl $http_proxy -o $OUTDIR/sra2fastq_temp/$run_acc.fastq.gz \"$url\"";
@@ -215,7 +216,7 @@ sub getSraFastqToolkits {
 	}
 
 	#dump fastq from SRA file
-	my $options = "-gzip ";
+	my $options = "--gzip ";
 	$options .= "--split-files " if $platform =~ /illu/i;
 	$options .= "--split-files -B " if $platform =~ /solid/;
 	print STDERR "Running fastq-dump with options $options...\n";
@@ -363,13 +364,24 @@ sub getReadInfo {
 	print STDERR "Retrieving run(s) information from NCBI-SRA...\n";
 
 	#get info from NCBI-SRA
-	$url = "https://trace.ncbi.nlm.nih.gov/Traces/sra/sra.cgi?save=efetch&db=sra&rettype=runinfo&term=$acc";
-	print STDERR "Retrieving run acc# from NCBI-SRA $url...\n";
-	my $cmd = ($Download_tool =~ /wget/)? "$curl -O - \"$url\" 2>/dev/null": "$curl $http_proxy \"$url\" 2>/dev/null";
+	my $url0 = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=sra&term=$acc&usehistory=y";
+	my $cmd = ($Download_tool =~ /wget/)? "$curl -O - \"$url0\" 2>/dev/null": "$curl $http_proxy \"$url0\" 2>/dev/null";
+	$web_result = `$cmd`;
+	my @lines = split '\n', $web_result;
+	my $webenv;
+	my $key;
+	foreach my $line(@lines){
+		$webenv = $1 if ( $line =~ /<WebEnv>(\S+)<\/WebEnv>/);
+		$key = $1 if ($line =~ /<QueryKey>(\S+)<\/QueryKey>/);
+	}
+	$url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=sra&rettype=runinfo&query_key=$key&WebEnv=$webenv&retmode=text";
+	print STDERR "Retrieving run acc# from NCBI-SRA $url0 $url...\n";
+	$cmd = ($Download_tool =~ /wget/)? "$curl -O - \"$url\" 2>/dev/null": "$curl $http_proxy \"$url\" 2>/dev/null";
 	$web_result = `$cmd`;
 	
-	my @lines = split '\n', $web_result;
-	print STDERR "$#lines run(s) found from NCBI-SRA.\n";
+	@lines = split '\n', $web_result;
+	my $sra_num_runs = $#lines;
+	print STDERR "$sra_num_runs run(s) found from NCBI-SRA.\n";
 
 	foreach my $line (@lines){
 		next if $line =~ /^Run/;
@@ -401,12 +413,19 @@ sub getReadInfo {
 	
 	print STDERR "Retrieving run(s) information from EBI-ENA...\n";
 	
-	$url = "https://www.ebi.ac.uk/ena/data/warehouse/filereport?accession=$acc&result=read_run&fields=run_accession,submission_accession,study_accession,experiment_accession,instrument_platform,library_layout,fastq_ftp,fastq_md5,fastq_bytes";
+	#$url = "https://www.ebi.ac.uk/ena/data/warehouse/filereport?accession=$acc&result=read_run&fields=run_accession,submission_accession,study_accession,experiment_accession,instrument_platform,library_layout,fastq_ftp,fastq_md5,fastq_bytes";
+	$url = "https://www.ebi.ac.uk/ena/portal/api/filereport?accession=$acc&result=read_run&fields=run_accession,submission_accession,study_accession,experiment_accession,instrument_platform,library_layout,fastq_ftp,fastq_md5,fastq_bytes";
 	print STDERR "Retrieving run acc# from EBI-ENA $url...\n";
 	#$cmd = ($Download_tool =~ /wget/)? "$curl -O - \"$url\" 2>/dev/null": "$curl $http_proxy \"$url\" 2>/dev/null";
 	$cmd = ($Download_tool =~ /wget/)? "$curl -O - \"$url\"": "$curl $http_proxy \"$url\"";
 	$web_result = `$cmd`;
-	die "ERROR: Failed to retrieve sequence information for $acc.\n" if $web_result !~ /^study_accession|^run_accession/;
+	if ($web_result !~ /^study_accession|^run_accession/ and ! $sra_num_runs){
+		die "ERROR: Failed to retrieve sequence information for $acc from both SRA and ENA database.\n";
+	}elsif($web_result !~ /^study_accession|^run_accession/ and $sra_num_runs){
+		warn "WARNING: $acc only found in SRA database. The data may be not synchronized among INSDC yet.\n";
+	}elsif($web_result =~ /^study_accession|^run_accession/ and ! $sra_num_runs){
+		warn "WARNING: $acc only found in ENA database. The data may be not synchronized among INSDC yet.\n";
+	}
 	#run_accession	fastq_ftp	fastq_bytes	fastq_md5	submitted_ftp	submitted_bytes	submitted_md5	sra_ftp	sra_bytes	sra_md5
 	my @lines = split '\n', $web_result;
 	print STDERR "$#lines run(s) found from EBI-ENA.\n";

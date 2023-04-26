@@ -49,6 +49,7 @@ if (!$variant_count)
 my $result;  # $result->{Locus_id}->{snp}, $result->{Locus_id}->{indel}
 my $inseq;
 my $myCodonTable   = Bio::Tools::CodonTable->new();
+my $ambiguous_mode = ($SNPs_file =~ /w_ambiguous/)? 1 : 0;
 
 if ($Genbankfile){
     &print_timeInterval($time,"Loading Genbank");
@@ -75,12 +76,13 @@ if ($format =~ /vcf/i){
 open (OUT2, ">$outDir/$basename.Indels_report.txt") or die "$!";
 if ($format =~ /vcf/i)
 {
-   print  OUT2 "Chromosome\tINDEL_position\tRef_Seq\tIndel_seq\tLength\tType\tProduct\tCDS_start\tCDS_end\tCount\tDP\tRatio\tF:R\tRoot-mean-square-mapping_quality\n";
+   print  OUT2 "Chromosome\tINDEL_position\tRef_Seq\tIndel_seq\tLength\tType\tProduct\tCDS_start\tCDS_end\tCDS_strand\tFrameshift\tCount\tDP\tRatio\tF:R\tRoot-mean-square-mapping_quality\n";
 }
 else
 {
-   print  OUT2 "Chromosome\tINDEL_position\tSequence\tLength\tType\tProduct\tCDS_start\tCDS_end\n";
+   print  OUT2 "Chromosome\tINDEL_position\tSequence\tLength\tType\tProduct\tCDS_start\tCDS_end\tCDS_strand\tFrameshift\n";
 }
+
 
 foreach my $locus_id (keys %{$result})
 {
@@ -128,25 +130,32 @@ foreach my $locus_id (keys %{$result})
   {
       next if ($indel{$pos}->{skip});
       my $seq = ($indel{$pos}->{direction} == -1)?reverse($indel{$pos}->{seq}):$indel{$pos}->{seq};
+      my $length = length($seq);
+      my $product = $indel{$pos}->{prodcut};
       print  OUT2 $indel{$pos}->{Locus},"\t",
                  $pos, "\t";
       if ($format =~ /vcf/i)
       {
          my $ref_seq = $indel{$pos}->{ref_seq};
          my $indel_seq = $indel{$pos}->{indel_seq};
+	 $length = abs (length($indel_seq)-length($ref_seq));
          print OUT2 $ref_seq,"\t",
                    $indel_seq,"\t",
-                   abs (length($indel_seq)-length($ref_seq)),"\t";     
+                   $length,"\t";     
       }
       else
       {
          print OUT2 $seq,"\t",
-                   length($seq),"\t";
+                   $length,"\t";
       }       
+      my $frameshift = ($length % 3 and $product !~ /Intergenic/i)? "Yes":"No";
+	      
       print  OUT2 $indel{$pos}->{type},"\t",
-             $indel{$pos}->{prodcut},"\t",
+             $product,"\t",
              $indel{$pos}->{cds_s},"\t",
-             $indel{$pos}->{cds_e};
+             $indel{$pos}->{cds_e}."\t",
+             $indel{$pos}->{strand}."\t",
+	     $frameshift;
       if ($format =~ /vcf/i){
            print OUT2 "\t",
                   $indel{$pos}->{dpalt},"\t",
@@ -338,6 +347,7 @@ sub process_snp_file
       my $snp_quality;
       my $vcf_info;
       my $vcf_info2;
+      my $indel_flag=0;
       my ($dp, $dp_alt, $dp_alt_ratio, $dp_f_r, $mean_quality);
       my ($ref_pos,$ref_base,$snp,$snp_pos,$buff,$dist,$ref_direction,$snp_direction,$ref_id,$query_id);
       if ($format =~ /nucmer/i) 
@@ -354,11 +364,22 @@ sub process_snp_file
               $dp_alt_ratio = sprintf("%.2f",$dp_alt/$dp);
               $dp_f_r = "$3:$4";
           }
+	  my @SNPs_events = split/,/, $snp;
+	  map { if (length($_) > 1) {$indel_flag = 1;} } @SNPs_events;
+	  $indel_flag = 1 if length($ref_base) > 1 or $vcf_info =~ /INDEL/;
           $mean_quality = $1 if ($vcf_info =~ /MQ=(\d+)/);
       }
       elsif ($format =~ /changelog/){
 	  my ($RATIO_OF_REF,$HQ_DOC,$HQ_RATIO_OF_REF,$HQ_RATIO_OF_CON);
+          my $amb_base="";
 	  ($ref_id,$ref_pos,$ref_base,$snp,$dp,$RATIO_OF_REF,$dp_alt_ratio,$HQ_DOC,$HQ_RATIO_OF_REF,$HQ_RATIO_OF_CON)=split /\t/,$snps_line;
+          if ($ambiguous_mode){
+             $snp =~ s/\w\((\w)\)/$1/;
+          }else{
+             if ($snp =~ /(\w)\((\w)\)/){ $snp = $1; $amb_base = $2;} 
+             $snp = $amb_base if ($amb_base and $ref_base eq $snp);
+          }
+          next if ($ref_base eq $snp);
 	  $ref_base = "." if $ref_base eq '-';
 	  $snp = '.' if $snp eq '-';
       }else
@@ -371,7 +392,7 @@ sub process_snp_file
       if (defined $coding_location_r->{$Locus_id}->{$ref_pos}) # in CDS
       {
           my ($start,$end,$strand,$product)= split /\t/, $coding_location_r->{$Locus_id}->{$ref_pos};
-          if ($ref_base eq "." or $snp eq "." or $vcf_info =~ /INDEL/)  #insertion/deletion
+          if ($ref_base eq "." or $snp eq "." or $indel_flag)  #insertion/deletion
           #if ($ref_base eq "." or $snp eq "." or $vcf_info =~ /INDEL/ or length ($snp) != length($ref_base))  #insertion/deletion
           {
              my $type;
@@ -420,6 +441,7 @@ sub process_snp_file
              $indel{$ref_pos}->{prodcut}=$product;
              $indel{$ref_pos}->{cds_s}=$start;
              $indel{$ref_pos}->{cds_e}=$end;
+             $indel{$ref_pos}->{strand}=$strand;
              $indel{$ref_pos}->{Locus}=$ref_id;
              $indel{$ref_pos}->{depth}=$dp;
              $indel{$ref_pos}->{dpalt}=$dp_alt;
@@ -517,8 +539,8 @@ sub process_snp_file
              } 
              $ref_aa= $myCodonTable->translate($ref_codon);
              $snp_aa= $myCodonTable->translate($snp_codon);
-    
-             my $synonymous = ($ref_aa eq $snp_aa)? "Yes":"No";
+             my $codon_index =  int(($ref_pos - $start)/3) + 1;
+             my $synonymous = ($ref_aa eq $snp_aa)? "Yes":"$ref_aa$codon_index$snp_aa";
              
              if (scalar (@snps)>1){
                $snps{$ref_pos}->{snp_aa}.=$snp_aa.",";
@@ -544,7 +566,7 @@ sub process_snp_file
       } # end in CDS
       else   # not in CDS
       {
-           if ($ref_base eq "." or $snp eq "." or $vcf_info =~ /INDEL/)  #insertion/deletion
+           if ($ref_base eq "." or $snp eq "." or $indel_flag)  #insertion/deletion
          # if ($ref_base eq "." or $snp eq "." or $vcf_info =~ /INDEL/ or length ($snp) != length($ref_base))  #insertion/deletion
           {
              my $type;

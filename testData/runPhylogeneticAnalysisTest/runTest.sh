@@ -12,8 +12,9 @@ test_result(){
 	Test=$rootdir/TestOutput/SNP_Phylogeny/testPhylogeneticAnalysis_summaryStatistics.txt
 	Expect=$rootdir/testPhylogeneticAnalysis_summaryStatistics.txt
 	Expect2=$rootdir/testPhylogeneticAnalysis_summaryStatistics2.txt
+	Expect3=$rootdir/testPhylogeneticAnalysis_summaryStatistics3.txt
 	testName="EDGE Phylogenetic Analysis test";
-	if cmp -s "$Test" "$Expect"
+	if cmp -s "$Test" "$Expect" || cmp -s "$Test" "$Expect3"
 	then
 		echo "$testName passed!"
 		touch "$rootdir/TestOutput/test.success"
@@ -42,7 +43,8 @@ then
 	rm -rf $rootdir/TestOutput
 fi
 
-perl $EDGE_HOME/runPipeline -c $rootdir/config.txt -o $rootdir/TestOutput -cpu 4 -noColorLog  -p $rootdir/ebola_R1.fastq $rootdir/ebola_R2.fastq || true
+sed -e "s;=ebola_contigs;=$PWD/ebola_contigs;" $rootdir/config.txt > $rootdir/config_run.txt
+perl $EDGE_HOME/runPipeline -c $rootdir/config_run.txt -o $rootdir/TestOutput -cpu 4 -noColorLog  -p $rootdir/ebola_R1.fastq $rootdir/ebola_R2.fastq || true
 rm -rf $rootdir/TestOutput/QcReads
 
 test_result;

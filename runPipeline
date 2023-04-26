@@ -12,10 +12,11 @@ use FindBin qw($RealBin);
 use File::Path qw(make_path remove_tree);
 use File::Copy;
 use lib "$RealBin/lib";
+#use open qw( :std :encoding(UTF-8) );  # when you have "Wide character in print at..." error. uncomment this line
 #use File::Tee qw(tee);
 require "$RealBin/edge_ui/metadata_scripts/metadata_api.pl";
 my $workingDir = Cwd::getcwd();
-$ENV{PATH} = "$RealBin:$RealBin/bin/:$RealBin/scripts/:$RealBin/thirdParty/Anaconda2/bin/:$ENV{PATH}:/usr/sbin:/opt/apps/bin";
+$ENV{PATH} = "$RealBin:$RealBin/bin/:$RealBin/scripts/:$RealBin/thirdParty/Mambaforge/bin/:$ENV{PATH}:/usr/sbin:/opt/apps/bin";
 $ENV{PERL5LIB} = ($ENV{PERL5LIB})? "$RealBin/lib:$RealBin/lib/perl5:$RealBin/lib/perl5/x86_64-linux-thread-multi:$ENV{PERL5LIB}":"$RealBin/lib:$RealBin/lib/perl5:$RealBin/lib/perl5/x86_64-linux-thread-multi";
 $ENV{PERL5SHELL} = "bash";
 $ENV{EDGE_HOME} = $RealBin;
@@ -25,7 +26,7 @@ $ENV{LANG} ||= "C.UTF-8";
 
 # unbuffer
 $|=1;
-my $version="2.4.0";
+my $version="2.4.1";
 my $debug=0;
 my @unpairedReadsFile;
 my @pairedReadsFile;
@@ -97,6 +98,7 @@ my $sys = &getSysParams("$RealBin/edge_ui/sys.properties");
 &Usage("Missing input files.") unless (@unpairedReadsFile or @pairedReadsFile or $configuration->{'DoSRADownload'} or $configuration->{qiime_input_dir} or $configuration->{targetedNGS_input_dir}  or $configuration->{inputContigs} or $inputContigs or $configuration->{piret_input_dir});
 &Usage("Missing output directory path.") unless ($outDir);
 &make_dir($outDir);
+chdir $outDir;
 my $abs_outDir=Cwd::abs_path("$outDir");
 unlink "$abs_outDir/HTML_Report/writeHTMLReport.finished";
 &setProxy if $sys->{proxy};
@@ -157,18 +159,21 @@ if ($configuration->{qiime_input_dir} || $configuration->{targetedNGS_input_dir}
 
 @pairedReadsFile = &checkFileAndDir; 
 
-
+if ($sys->{user_input_size_maxsize}){
+    ## check file size before proecessing ex: -s $filename > 50 *1024 *1024 *1024  (50Gb) 
+    &checkInputSize(\@unpairedReadsFile, \@pairedReadsFile);
+}
 
 my $count_file_list= "$outDir/QcReads/fastqCount.txt";
-my ($QCpairFile,$QCunpairFile);
+my ($QCpairFile,$QCunpairFile, $avg_read_length);
 if(@unpairedReadsFile or @pairedReadsFile)
 {
-    ($QCpairFile,$QCunpairFile)=&countFastq(\@unpairedReadsFile, \@pairedReadsFile);   
+    ($QCpairFile,$QCunpairFile,$avg_read_length)=&countFastq(\@unpairedReadsFile, \@pairedReadsFile);   
 }
 
 if ($configuration->{DoQC})
 {
-    ($QCpairFile,$QCunpairFile)=&runQC($QCpairFile,$QCunpairFile);
+    ($QCpairFile,$QCunpairFile)=&runQC($QCpairFile,$QCunpairFile,$avg_read_length);
 }
 
 if ($configuration->{DoJoinPE}){
@@ -211,7 +216,7 @@ if ($configuration->{DoAssembly} && ($QCpairFile or $QCunpairFile))
 {
 	my $assembler = $configuration->{assembler};
 	($contigFile,$contig_for_annotation_file)=&runAssembly($QCpairFile,$QCunpairFile,$assembler) if (!$configuration->{assembledContigs});
-	&runReadsToContig($QCpairFile,$QCunpairFile,$contigFile) if ($contigFile and $configuration->{DoReadsMappingContigs});
+	&runReadsToContig($QCpairFile,$QCunpairFile,$contigFile) if ($contigFile and -s $contigFile and $configuration->{DoReadsMappingContigs});
 }
 
 my $tax_kingdom=$configuration->{kingdom};
@@ -281,7 +286,7 @@ else # reference unknown
 }
 
 
-if ($configuration->{DoContigsTaxonomy} and $contigFile)
+if ($configuration->{DoContigsTaxonomy} and $contigFile and -s $contigFile)
 {
     &Contigs_taxonomyAssignment($contigFile);
 }
@@ -457,13 +462,13 @@ sub runPiReT {
     my $cmd="$RealBin/thirdParty/piret/bin/piret -e $exp_design -d $outputDir --config $luigi_config 2>$log";
     &lprint ("  Running \n  $cmd \n");
     open (my $fh, ">", $run_script);
-    my $piret_env_path1 = "$RealBin/thirdParty/piret/thirdParty/miniconda/envs/piret";
-    my $piret_env_path2 = "$RealBin/thirdParty/Anaconda3/envs/piret";
+    my $piret_env_path1 = "$RealBin/thirdParty/PyPiReT/thirdParty/miniconda/envs/piret";
+    my $piret_env_path2 = "$RealBin/thirdParty/Mambaforge/envs/piret";
     my $piret_env = (-e $piret_env_path1)? $piret_env_path1 : ( -e $piret_env_path2)? $piret_env_path2 : "piret";
-    print $fh  "source $RealBin/thirdParty/Anaconda3/bin/activate $piret_env 1>/dev/null\n";
+    print $fh  "source $RealBin/thirdParty/Mambaforge/bin/activate $piret_env 1>/dev/null\n";
     print $fh  "LUIGI_CONFIG_PATH=$luigi_config  ";
     print $fh $cmd,"\n";
-    #print $fh "source $RealBin/thirdParty/Anaconda3/bin/deactivate piret 1>/dev/null\n";
+    #print $fh "source $RealBin/thirdParty/Mambaforge/bin/deactivate piret 1>/dev/null\n";
     close $fh;
     &executeCommand2("/bin/bash $run_script");
     #unlink "$outputDir/$piret_indir_basename";
@@ -506,39 +511,55 @@ sub prepareExpDesignAndConfig{
     if ($kingdom eq 'prokarya')
     {
         if ( !-e $prokaryote_fasta || ! -e $prokaryote_gff){
-            &lprint("ERROR: Please provide prokaryote fasta and gff files");
+            die ("ERROR: Please provide prokaryote fasta and gff files");
             exit;
         }
 	if (! is_gff($prokaryote_gff)){
-             &lprint("ERROR:prokaryote_gff is not in GFF3 format");
+             die("ERROR:prokaryote_gff is not in GFF3 format");
              exit;
 	}
     }
     elsif ($kingdom eq 'eukarya')
     {
         if ( ! -e $eukarya_fasta  || ! -e $eukarya_gff){
-            &lprint("ERROR: Please provide eukaryote fasta and gff files");
+            die("ERROR: Please provide eukaryote fasta and gff files");
             exit;
         }
 	if (! is_gff($eukarya_gff)){
-             &lprint("ERROR:eukarya_gff is not in GFF3 format");
+             die("ERROR:eukarya_gff is not in GFF3 format");
              exit;
 	}
     }   
     elsif ($kingdom eq 'both')
     {
         if ( !-e $prokaryote_fasta || ! -e $prokaryote_gff){
-            &lprint("ERROR: Please provide prokaryote fasta and gff files");
+            die("ERROR: Please provide prokaryote fasta and gff files");
             exit;
         }
         if ( ! -e $eukarya_fasta  || ! -e $eukarya_gff){
-            &lprint("ERROR: Please provide eukaryote fasta and gff files");
+            die("ERROR: Please provide eukaryote fasta and gff files");
             exit;
         }
 	if (! is_gff($prokaryote_gff) || ! is_gff($eukarya_gff)){
-             &lprint("ERROR:prokaryote_gff or eukarya_gff is not in GFF3 format");
+             die("ERROR:prokaryote_gff or eukarya_gff is not in GFF3 format");
              exit;
 	}
+    }
+    if ($prokaryote_fasta and $prokaryote_fasta =~ /\.gz$/){
+	    system("gunzip $prokaryote_fasta");
+	    $prokaryote_fasta =~ s/\.gz$//;
+    }
+    if ($prokaryote_gff and $prokaryote_gff =~ /\.gz$/){
+	    system("gunzip $prokaryote_gff");
+	    $prokaryote_gff =~ s/\.gz$//;
+    }
+    if ($eukarya_fasta and $eukarya_fasta =~ /\.gz$/){
+	    system("gunzip $eukarya_fasta");
+	    $eukarya_fasta =~ s/\.gz$//;
+    }
+    if ($eukarya_gff and $eukarya_gff =~ /\.gz$/){
+	    system("gunzip $eukarya_gff");
+	    $eukarya_gff =~ s/\.gz$//;
     }
     if ($exp_file =~ /xlsx$/){ 
         open ($fh, "-|")
@@ -552,6 +573,7 @@ sub prepareExpDesignAndConfig{
         chomp;
         next if (/^\n/);
         next unless (/\S/);
+	$_ =~ s/^\s+|\s+$//g;
         if (/ID/ && /Files/i){
             my @header = split /\t/,$_;
             ( $file_column_index )= grep { $header[$_] =~ /files/i } 0..$#header;
@@ -560,6 +582,7 @@ sub prepareExpDesignAndConfig{
             my @array = split /\t/,$_;
             $array[$file_column_index] =~ tr/"//d;
             $array[$file_column_index] =~ s/^\s+|\s+$//g;
+            $array[$file_column_index] =~ s/,/:/g;
             $array[$file_column_index] =~ s/:/:$dir\//;
             $array[$file_column_index] = "$dir/$array[$file_column_index]";
             $array[0] =~ s/[^\w-]/_/g;
@@ -697,7 +720,7 @@ sub runSpecialtyGenesProfiling {
     my $annotationGFF = shift;
     my $search_tool = $configuration->{SpecialtyGenesSearchTool} || "rapsearch2";
     my $ShortBRED_PATH = "$RealBin/bin/ShortBRED";
-    #my $rgi_PATH = "$RealBin/thirdParty/Anaconda3/bin";
+    #my $rgi_PATH = "$RealBin/thirdParty/Mambaforge/bin";
     my $cov_table="$abs_outDir/AssemblyBasedAnalysis/readsMappingToContig/readsToContigs_coverage.table";
     my $identity = $configuration->{ShortBREDMinPercIdentity} || "0.95";
     my $pctlength = $configuration->{ShortBREDMinPercLength} || "0.95"; 
@@ -786,8 +809,8 @@ sub runSpecialtyGenesProfiling {
 		
 		
 	# AR
-		my $rgi_env = "$RealBin/thirdParty/Anaconda3/envs/py36";
-		my $rgi_env_activate_cmd="source $RealBin/thirdParty/Anaconda3/bin/activate $rgi_env 1>/dev/null";
+		my $rgi_env = "$RealBin/thirdParty/Mambaforge/envs/py38";
+		my $rgi_env_activate_cmd="source $RealBin/thirdParty/Mambaforge/bin/activate $rgi_env 1>/dev/null";
 		my $deactivate_cmd="source deactivate 2>/dev/null || true";
 		$cmd = "cd $outputDir; $rgi_env_activate_cmd; rgi load -i $CARD_json --local 1>>$log 2>&1 ; $deactivate_cmd";
         &executeCommand($cmd);
@@ -1074,8 +1097,8 @@ sub runQiimeAnalysis{
     $cmd .= " > $log ";
     &lprint ("  Running \n  $cmd \n");
     open (my $fh, ">", $run_script);
-    my $qiime2_env_path = "$RealBin/thirdParty/Anaconda3/envs/qiime2";
-    print $fh  "source $RealBin/thirdParty/Anaconda3/bin/activate $qiime2_env_path 1>/dev/null\n";
+    my $qiime2_env_path = "$RealBin/thirdParty/Mambaforge/envs/qiime2";
+    print $fh  "source $RealBin/thirdParty/Mambaforge/bin/activate $qiime2_env_path 1>/dev/null\n";
     print $fh "export PYTHONUNBUFFERED=on\n";
     print $fh $cmd,"\n";
     close $fh;
@@ -1127,7 +1150,7 @@ sub runUnmappedReadsToRefSeq
     my $outPrefix = "UnmappedReads";
     my $outputDir= "$outDir/ReferenceBasedAnalysis/UnmappedReads";
     my $log= "$outputDir/mapping.log";
-    my $ont_flag = ($configuration->{"fastq_source"} =~ /nanopore/)? "-x ont2d -T $configuration->{min_L} ": ""; 
+    my $ont_flag = ($configuration->{"fastq_source"} =~ /nanopore/)? "-x ont2d -T $configuration->{min_L} ": ($configuration->{"fastq_source"} =~ /pacbio/i)? "-x pacbio -T $configuration->{min_L} " :"";
     if ( -s "$outputDir/UnmappedReads_coverage.txt" )
     {
        &lprint ("  Done mapping $outPrefix.\n"); 
@@ -1571,6 +1594,7 @@ sub Reads_taxonomyAssignment
     my $outputDir = shift;
     my $config_json = "$outputDir/../../config.json";
     my $ont_flag = ($configuration->{"fastq_source"} =~ /nanopore/)? 1 : 0;
+    my $pacbio_flag = ($configuration->{"fastq_source"} =~ /pacbio/i)? 1 : 0;
     my $input = ($outputDir =~ /Unmap/)?"$outputDir/UnmappedReads.fastq":"$outputDir/allReads.fastq";
     my $logFile = "$outputDir/error.log";
     my $log = "$outputDir/taxonomyProfiling.log";
@@ -1606,7 +1630,7 @@ sub Reads_taxonomyAssignment
 		$bwaScoreCut = int($bases/$reads*0.8);
 		close ($qcfh);
 	}
-    if ($ont_flag){
+    if ($ont_flag or $pacbio_flag){
         $bwaScoreCut = ( $configuration->{"min_L"} > 1000 )?  $configuration->{"min_L"}: 1000;
     }
     my $cmd0 ="$RealBin/scripts/microbial_profiling/microbial_profiling_configure.pl -template $RealBin/scripts/microbial_profiling/microbial_profiling.settings.tmpl -tools $configuration->{enabledTools} -bwaScoreCut $bwaScoreCut -configJson $config_json"; 
@@ -1671,6 +1695,8 @@ sub variantAnalysis
     my $outputDir="$outDir/AssemblyBasedAnalysis/contigMappingToRef/";
     my $log = "$outputDir/variantAnalysis.log";
     my $r2g_outputDir="$outDir/ReadsBasedAnalysis/readsMappingToRef/";
+    my @r2g_consensus_log_files = glob("$r2g_outputDir/*consensus.changelog");
+    my @r2g_consensus_gap_files = glob("$r2g_outputDir/*consensus.gaps");
     my $c2g_gapAnalysisOutput="$outputDir/GapVSReference.report.txt";
     my $r2g_gapAnalysisOutput="$r2g_outputDir/GapVSReference.report.txt";
     my $r2g_gapJSONanalysisOutput = "$r2g_outputDir/GapVSReference.report.json";
@@ -1718,10 +1744,40 @@ sub variantAnalysis
       &lprint (" Running \n $cmd\n");
       &executeCommand($cmd);
     }
+    foreach my $con_gap_file(@r2g_consensus_gap_files){
+      my $prefix = basename($con_gap_file,".gaps");
+      my $output = "$r2g_outputDir/$prefix.gaps_report.txt";
+      $cmd="$RealBin/scripts/gap_analysis.pl -gff $gff3File -gap $con_gap_file >  $output 2>>$log2";
+      &lprint (" Running \n $cmd\n");
+      &executeCommand($cmd);
+    }
+    foreach my $con_log_file(@r2g_consensus_log_files){
+      my $prefix = basename($con_log_file,".changelog");
+      my $ambiguous_log  = "$r2g_outputDir/${prefix}_w_ambiguous.log";
+      symlink($con_log_file,$ambiguous_log);
+      $cmd="$RealBin/scripts/SNP_analysis.pl -gff $gff3File -SNP $con_log_file $fastainput -format changelog -output $r2g_outputDir 2>>$log2";
+      &lprint (" Running \n $cmd\n");
+      &executeCommand($cmd);
+      $cmd="$RealBin/scripts/SNP_analysis.pl -gff $gff3File -SNP $ambiguous_log $fastainput -format changelog -output $r2g_outputDir 2>>$log2";
+      &lprint (" Running \n $cmd\n");
+      &executeCommand($cmd);
+
+      $cmd="$RealBin/scripts/tab2Json_for_dataTable.pl -limit 0 $r2g_outputDir/${prefix}.SNPs_report.txt > $r2g_outputDir/${prefix}.SNPs_report.json";
+      &executeCommand($cmd) if ( -e "$r2g_outputDir/${prefix}.SNPs_report.txt" );
+      $cmd="$RealBin/scripts/tab2Json_for_dataTable.pl -limit 0 $r2g_outputDir/${prefix}.Indels_report.txt > $r2g_outputDir/${prefix}.Indels_report.json";
+      &executeCommand($cmd) if ( -e "$r2g_outputDir/${prefix}.Indels_report.txt" );
+
+      unlink "$r2g_outputDir/${prefix}_w_ambiguous.Indels_report.txt";
+      unlink $ambiguous_log;
+    }
 
     &printRunTime($time);
     $cmd="$RealBin/scripts/tab2Json_for_dataTable.pl -project_dir $abs_outDir -limit 0 -mode ref_gap $r2g_gapAnalysisOutput > $r2g_gapJSONanalysisOutput";
     &executeCommand($cmd) if ( -s $r2g_gapAnalysisOutput );
+    $cmd="$RealBin/scripts/tab2Json_for_dataTable.pl -limit 0 $r2g_outputDir/readsToRef.Indels_report.txt > $r2g_outputDir/readsToRef.Indels_report.json";
+    &executeCommand($cmd) if ( -e "$r2g_outputDir/readsToRef.Indels_report.txt" );
+    $cmd="$RealBin/scripts/tab2Json_for_dataTable.pl -limit 0 $r2g_outputDir/readsToRef.SNPs_report.txt > $r2g_outputDir/readsToRef.SNPs_report.json";
+    &executeCommand($cmd) if ( -e "$r2g_outputDir/readsToRef.SNPs_report.txt" );
     &touchFile("$outputDir/variantAnalysis.finished") if ( -e $outputDir);
     &touchFile("$r2g_outputDir/variantAnalysis.finished") if ( -e $r2g_outputDir);
     return 0;
@@ -1908,6 +1964,9 @@ sub runAnnotation
     my $outFAA="$outputDir_abs_path/$project_name.faa";
     my $outFNA="$outputDir_abs_path/$project_name.fna";
     my $customHMM = $configuration->{customHMM};
+    my $customProtein = $configuration->{customProtein};
+    my $evalue = $configuration->{annotation_evalue};
+    my $gcode = $configuration->{annotation_gcode};
     my $log = "$outputDir/Annotation.log"; 
     my $gff_plot_log = "$outputDir/plot_gff3.log"; 
     my $kegg_map_log = "$outputDir/kegg_map.log";
@@ -1968,7 +2027,10 @@ sub runAnnotation
 			&executeCommand($cmd);
 		}
 	}
-        $cmd = "$RealBin/bin/prokka --quiet --force $hmm_file --locustag $project_name --prefix $project_name --cpus $numCPU --outdir $outputDir --kingdom $tax_kingdom $contigFile 2>>$log"; 
+	my $customProtein_option = ($customProtein and -f $customProtein)?"--protein $customProtein":"";
+        my $evalue_option = ($evalue)? "--evalue $evalue":"";
+	my $gcode_option = ($gcode)? "--gcode $gcode":"";
+        $cmd = "$RealBin/bin/prokka --quiet --force $customProtein_option $hmm_file $evalue_option $gcode_option --locustag $project_name --prefix $project_name --cpus $numCPU --outdir $outputDir --kingdom $tax_kingdom $contigFile 2>>$log"; 
     }
     &lprint (" Running \n $cmd\n");
     &executeCommand($cmd);
@@ -2075,8 +2137,9 @@ sub runCheckM{
     my $MaxBin_summary = "$MaxBin_dir/${project_name}_bin.summary";
     my $time=time();
     my $outputDir = "$outDir/AssemblyBasedAnalysis/Binning/CheckM";
+    my $log = "$outputDir/AssemblyBasedAnalysis/Binning/CheckM_log.txt";
     my $CheckM_summary = "$outputDir/CheckM.txt";
-    my $checkm_PATH="$RealBin/thirdParty/Anaconda3/bin";
+    my $checkm_PATH="$RealBin/thirdParty/Mambaforge/envs/py38/bin";
     my $evalue = '1e-10';  # -e
     my $overlap_length_perc = 0.7;  # -l 
     my $multi = 10;  # -m
@@ -2102,7 +2165,7 @@ sub runCheckM{
        return;
     }
     # -r, --reduced_tree    use reduced tree (requires <16GB of memory)
-    my $cmd = "cd $outputDir/.. ; $checkm_PATH/checkm lineage_wf --tmpdir . -q --tab_table -e $evalue -l $overlap_length_perc -f $CheckM_summary -t $numCPU -x fasta $MaxBin_dir $outputDir";
+    my $cmd = "cd $outputDir/.. ; $checkm_PATH/checkm lineage_wf --tmpdir . -q --tab_table -e $evalue -l $overlap_length_perc -f $CheckM_summary -t $numCPU -x fasta $MaxBin_dir $outputDir 1>$log 2>\&1";
 
     &lprint (" Running \n $cmd\n");
     &executeCommand("$cmd");
@@ -2122,22 +2185,26 @@ sub runAntiSmash {
     my $outputDir = "$outDir/AssemblyBasedAnalysis/AntiSmash";
     my $log = "$outputDir/log.txt";
     my $run_script = "$outputDir/runAntiSmash.sh";
+    my $title=$configuration->{projname};
     my $taxon = $configuration->{'antismash-taxon'} || 'bacteria';
     my $clusterblast = $configuration->{'antismash-clusterblast'}  || '0';
     my $subclusterblast = $configuration->{'antismash-subclusterblast'}  || '1';
     my $knownclusterblast = $configuration->{'antismash-knownclusterblast'} || "1";
+    my $mibig = $configuration->{'antismash-mibig'} || "0";
     my $smcogs = $configuration->{'antismash-smcogs'} || '0';
+    my $pfam2go = $configuration->{'antismash-pfam2go'} || '0';
     my $asf = $configuration->{'antismash-asf'} || "1";
+    my $rre = $configuration->{'antismash-rre'} || "1";
     my $fullhmm = $configuration->{'antismash-fullhmm'} || '0';
+    my $tigrfam = $configuration->{'antismash-tigrfam'} || '0';
     my $cassis = $configuration->{'antismash-cassis'} || '0'; ## fungi only
-    my $tta = $configuration->{'antismash-tta'} || '0'; ## bacteria only
-    my $borderpredict = $configuration->{'antismash-borderpredict'} || '0';
-    my $inclusive = $configuration->{'antismash-inclusive'} || '0';
-    my $inclusive_cdsnr = $configuration->{'antismash-inclusive-cdsnr'} || '5';
-    my $inclusive_threshold  = $configuration->{'antismash-inclusive-threshold'} || '0.6';
-    my $inclusive_npfams = $configuration->{'antismash-inclusive-npfams'} || '5' ;
+    #my $tta = $configuration->{'antismash-tta'} || '0'; ## bacteria only
+    #my $borderpredict = $configuration->{'antismash-borderpredict'} || '0';
+    #my $inclusive = $configuration->{'antismash-inclusive'} || '0';
+    #my $inclusive_cdsnr = $configuration->{'antismash-inclusive-cdsnr'} || '5';
+    #my $inclusive_threshold  = $configuration->{'antismash-inclusive-threshold'} || '0.6';
+    #my $inclusive_npfams = $configuration->{'antismash-inclusive-npfams'} || '5' ;
    
-    &make_dir($outputDir);
     if ($noColorLog)
     {
         &lprint ("[Secondary Metabolite Analysis]\n");
@@ -2151,25 +2218,35 @@ sub runAntiSmash {
        &lprint ("Secondary Metabolite Analysis Finished\n");
        return;
     }
-    my $cmd = "antismash -c $numCPU --taxon $taxon --logfile $log --outputfolder $outputDir ";
-    $cmd .= " --clusterblast" if ($clusterblast);
-    $cmd .= " --subclusterblast" if ($subclusterblast);
-    $cmd .= " --knownclusterblast" if ($knownclusterblast);
-    $cmd .= " --smcogs" if ($smcogs);
+    remove_tree($outputDir);
+    &make_dir($outputDir);
+    my $cmd = "antismash -c $numCPU --taxon $taxon --logfile $log --output-dir $outputDir/output ";
+    $cmd .= " --html-title $title";
+    $cmd .= " --database $RealBin/database/antiSMASH";
+    $cmd .= " --cb-general" if ($clusterblast);
+    $cmd .= " --cb-subclusters" if ($subclusterblast);
+    $cmd .= " --cb-knownclusters" if ($knownclusterblast);
+    $cmd .= " --cc-mibig" if ($mibig);
+    $cmd .= " --smcogs-trees" if ($smcogs);
     $cmd .= " --asf" if ($asf);
-    $cmd .= " --full-hmmer" if ($fullhmm);
+    $cmd .= " --rre" if ($rre);
+    $cmd .= " --fullhmmer" if ($fullhmm);
+    $cmd .= " --tigrfam" if ($tigrfam);
+    $cmd .= " --pfam2go" if ($pfam2go);
     $cmd .= " --cassis" if ($cassis && $taxon =~ /fungi/i);
-    $cmd .= " --tta" if ($tta && $taxon=~/bacteria/i);
-    $cmd .= " --borderpredict" if ($borderpredict);
-    $cmd .= " --inclusive" if ($inclusive);
-    $cmd .= " --cf_cdsnr $inclusive_cdsnr" if ($inclusive_cdsnr != 5 );
-    $cmd .= " --cf_threshold $inclusive_threshold" if ($inclusive_threshold != 0.6);
-    $cmd .= " --cf_npfams $inclusive_npfams" if ($inclusive_npfams != 5); 
+    $cmd .= " --genefinding-tool prodigal-m ";
+    #$cmd .= " --tta" if ($tta && $taxon=~/bacteria/i);
+    #$cmd .= " --borderpredict" if ($borderpredict);
+    #$cmd .= " --inclusive" if ($inclusive);
+    #$cmd .= " --cf_cdsnr $inclusive_cdsnr" if ($inclusive_cdsnr != 5 );
+    #$cmd .= " --cf_threshold $inclusive_threshold" if ($inclusive_threshold != 0.6);
+    #$cmd .= " --cf_npfams $inclusive_npfams" if ($inclusive_npfams != 5); 
     $cmd .= " $input_file";
     &lprint ("  Running \n  $cmd \n");
-    my $antismash_env = "$RealBin/thirdParty/Anaconda2/envs/antismash";
+    my $antismash_env = "$RealBin/thirdParty/Mambaforge/envs/antismash";
     open (my $fh, ">", $run_script);
-    print $fh  "source $RealBin/thirdParty/Anaconda2/bin/activate $antismash_env 1>/dev/null\n";
+    print $fh  "source $RealBin/thirdParty/Mambaforge/bin/activate $antismash_env 1>/dev/null\n";
+    print $fh "unset _JAVA_OPTIONS\n";
     print $fh $cmd," 2>/dev/null\n";
     close $fh;
     &executeCommand2("/bin/bash $run_script");
@@ -2312,8 +2389,9 @@ my $readsMappingToRefPDF="$outDir/ReadsBasedAnalysis/readsMappingToRef/readsToRe
 my $primerCheckPDF="$outDir/AssayCheck/pcrValidation.pdf";
 my $contigTaxonomyPDF="$outDir/AssemblyBasedAnalysis/Taxonomy/$project_name.contigsClassification.pdf";
 my $ont_flag = ($configuration->{"fastq_source"} =~ /nanopore/)? 1 : 0;
-my $nanoplot_loglength_Histogram = "$outDir/QcReads/LogTransformed_HistogramReadlength.pdf";
-my $nanoplot_length_Histogram = "$outDir/QcReads/HistogramReadlength.pdf";
+my $pacbio_flag = ($configuration->{"fastq_source"} =~ /pacbio/i)? 1 : 0;
+my $nanoplot_loglength_Histogram = ( -e "$outDir/QcReads/LogTransformed_HistogramReadlength.pdf")? "$outDir/QcReads/LogTransformed_HistogramReadlength.pdf": "$outDir/QcReads/Non_weightedLogTransformed_HistogramReadlength.pdf";
+my $nanoplot_length_Histogram = (-e "$outDir/QcReads/HistogramReadlength.pdf")? "$outDir/QcReads/HistogramReadlength.pdf": "$outDir/QcReads/Non_weightedHistogramReadlength.pdf";
 my $nanoplot_length_quality_plot= ( -e "$outDir/QcReads/LengthvsQualityScatterPlot_loglength_kde.pdf")? "$outDir/QcReads/LengthvsQualityScatterPlot_loglength_kde.pdf":"$outDir/QcReads/Log_LengthvsQualityScatterPlot_kde.pdf";
 my $nanoplot_yield_by_length = "$outDir/QcReads/Yield_By_Length";
 my $mergeFiles="$InputLogPDF,";
@@ -2452,7 +2530,7 @@ tmp<-dev.off()
 Rscript
 }
 
-if ($ont_flag && -e "$QCstatsTXT" ){
+if (($ont_flag or $pacbio_flag)&& -e "$QCstatsTXT" ){
 print $Rfh <<Rscript;
 def.par <- par(no.readonly = TRUE) 
 pdf(file = \"$QCstatsPDF\",width=10,height=8)
@@ -2485,7 +2563,7 @@ if ($configuration->{DoHostRemoval}){
     $mergeFiles .= $hostReomvalPDF.",";
 }
 
-if ($contigFile and $configuration->{DoReadsMappingContigs}){
+if ($contigFile and -s $contigFile and $configuration->{DoReadsMappingContigs}){
 	$mergeFiles .= $contigStatsPDF.",";
 }
 if ( -e "$outDir/AssemblyBasedAnalysis/readsMappingToContig/readsToContigs.alnstats.txt"){
@@ -2510,7 +2588,7 @@ $mergeFiles .= $annotationStatsPDF."," if ( -e $annotationStatsPDF);
 
 if ($referenceGenome)
 {
-    if ($contigFile)
+    if ($contigFile and -s $contigFile)
     {
         $mergeFiles .= $contigMappingToRefStatsPDF.",".$contigMappingToRefPDF.",";
 print $Rfh <<Rscript;
@@ -2631,7 +2709,7 @@ unlink $InputLogPDF;
      next if ($file eq $contigTaxonomyPDF);
      my ($file_name, $file_path, $file_suffix)=fileparse("$file", qr/\.[^.]*/);
      my $size_opt = ($file_name =~ /tree/)? "-resize 240":"-density 120";
-     push @conversions, "convert $size_opt -flatten $file $imagesDir/$file_name.png" if (-e $file);
+     push @conversions, "convert $size_opt -colorspace RGB -flatten $file $imagesDir/$file_name.png" if (-e $file);
  }
  #push @conversions, "convert -strip -density 120 -flatten $primerCheckPDF $imagesDir/pcrValidation.png" if (-e $primerCheckPDF);
  
@@ -2716,13 +2794,14 @@ sub runQC
 {
     my $pairedFile=shift;
     my $unpairedFile=shift;
+    my $avg_read_length=shift;
     my $time=time();
     my $outputDir="$outDir/QcReads";
     my $log = "$outputDir/QC.log";
     #my @unpairedFile= @$unpairedFile;
     #my @pairedFile= @$pairedFile;
-    my $quality_cutoff = $configuration->{"q"} || 5;
-    my $min_length = $configuration->{"min_L"} || 50;
+    my $quality_cutoff = ($configuration->{"q"})? $configuration->{"q"} : 5;
+    my $min_length = ($configuration->{"min_L"})? $configuration->{"min_L"} : 50;
     my $avg_quality = ($configuration->{"avg_q"})? $configuration->{"avg_q"}:0;
     my $num_N = ($configuration->{"n"})? $configuration->{"n"} : 10;
     my $low_complexity = $configuration->{"lc"} || 0.85;
@@ -2730,7 +2809,9 @@ sub runQC
     my $cut_5_end = ($configuration->{"5end"})? $configuration->{"5end"}: 0;
     my $split_size = $configuration->{"split_size"} || 100000;
     my $ont_flag = ($configuration->{"fastq_source"} =~ /nanopore/)? 1 : 0; 
+    my $pacbio_flag = ($configuration->{"fastq_source"} =~ /pacbio/)? 1 : 0;
     my $unpairedFile_output = ($configuration->{"porechop"}  && $ont_flag )? "$outputDir/QC.unpaired.porechop.fastq":"$outputDir/QC.unpaired.trimmed.fastq";
+    $min_length = ($min_length >=1)? $min_length : int($min_length * $avg_read_length);
     &make_dir($outputDir);
     if ($noColorLog)
     {
@@ -2758,11 +2839,13 @@ sub runQC
     $parameters .= " --split_size $split_size -d $outputDir -t $numCPU";
     $parameters .= " --adapter --artifactFile ". $configuration->{"adapter"} if (-e $configuration->{"adapter"} && is_fasta($configuration->{"adapter"}));
     $parameters .= " --polyA " if ($configuration->{"polyA"});
-    $parameters .= " --trim_only " if $ont_flag;
+    $parameters .= " --trim_only " if $ont_flag or $pacbio_flag;
     $parameters .= " --ascii $configuration->{qc_phred_offset} " if ($configuration->{qc_phred_offset});
      #$parameters .= " -phiX "  if ($configuration->{"phiX"});
     my $command = "$RealBin/bin/FaQCs $parameters 1>$log 2>\&1";
-    #my $command = "perl $RealBin/scripts/illumina_fastq_QC.pl $parameters 1>$log 2>\&1";
+    if ($pacbio_flag or $ont_flag){
+        $command = "perl $RealBin/scripts/illumina_fastq_QC.pl $parameters 1>$log 2>\&1";
+    }
     &lprint ("  Running \n  $command \n");
     &executeCommand($command);
     
@@ -2770,16 +2853,18 @@ sub runQC
 	# if adapte trim run Porechop
         my $cmd;
         if ($configuration->{"porechop"}){
-            my $porechop_env= "$RealBin/thirdParty/Anaconda3/envs/py36";
-            my $porechop_env_activate = "source $RealBin/thirdParty/Anaconda3/bin/activate $porechop_env 1>/dev/null"; 
+            my $porechop_env= "$RealBin/thirdParty/Mambaforge/envs/py38";
+            my $porechop_env_activate = "source $RealBin/thirdParty/Mambaforge/bin/activate $porechop_env 1>/dev/null"; 
             my $deactivate_cmd = "source deactivate 2>/dev/null || true";
             $cmd = "$porechop_env_activate; porechop -i $outputDir/QC.unpaired.trimmed.fastq -o $outputDir/QC.unpaired.porechop.fastq -t $numCPU > $log; $deactivate_cmd ";
             &lprint ("  Running \n  $cmd \n");
             &executeCommand($cmd);
         }
-        $cmd = "NanoPlot --fastq $unpairedFile_output --N50 --loglength -t $numCPU -f pdf --outdir $outputDir 2>/dev/null";
-	&lprint ("  Running \n  $cmd \n");
-        &executeCommand($cmd);
+	if ( -s "$outputDir/QC.unpaired.porechop.fastq"){
+            $cmd = "NanoPlot --fastq $unpairedFile_output --N50 --loglength -t $numCPU -f pdf --outdir $outputDir 2>/dev/null";
+	    &lprint ("  Running \n  $cmd \n");
+            &executeCommand($cmd);
+	}
     }
     
     &printRunTime($time);
@@ -2794,7 +2879,31 @@ sub runQC
         die "failed: No reads remain after QC. Please see $log\n"; 
     }
 }
-
+sub checkInputSize{
+    my $unpairedFile=shift;
+    my $pairedFile=shift;
+    my $time=time();
+    my $outputDir="$outDir/QcReads";
+    my @unpairedFile= @$unpairedFile;
+    my @pairedFile= @$pairedFile;
+    my $input_total_size = 0;
+    foreach my $pair (@pairedFile){
+        my ($R1,$R2) = split /\s+/,$pair;
+        $input_total_size += -s $R1 + -s $R2;
+    }
+    foreach my $file (@unpairedFile){
+        $input_total_size += -s $file;
+    }
+    if ($input_total_size  > $sys->{user_input_size_maxsize} * 1024 * 1024 * 1024){
+        my $msg = "Project Input Size is over $sys->{user_input_size_maxsize} GB";
+        my $log = "$outputDir/QC.log";
+        &lprint("$msg");
+        `echo $msg >> $log`;
+        unlink @pairedReadsFile;
+        unlink @unpairedReadsFile;
+        exit;
+    }
+}
 sub countFastq 
 {
     my $unpairedFile=shift;
@@ -2807,6 +2916,11 @@ sub countFastq
     my $all_R2_fastq = "$outputDir/all.2.fastq";
     my $all_SE_fastq = "$outputDir/all.se.fastq";
     my $count_file_list= "$outputDir/fastqCount.txt";
+    my $avg_read_len= 0 ;
+    my $PE_count = 0 ;
+    my $PE_total_len = 0;
+    my $SE_count= 0 ;
+    my $SE_total_len = 0 ;
     &make_dir($outputDir);
     if ($noColorLog)
     {
@@ -2818,20 +2932,21 @@ sub countFastq
     }
     if (-e "$outputDir/countFastq.finished")
     {
+	$avg_read_len=&get_avg_read_length($count_file_list);
         if ( -s $all_R1_fastq && -e $all_SE_fastq)
         {
             &lprint ("Count Fastq Finished\n");
-            return ("$all_R1_fastq $all_R2_fastq","$all_SE_fastq");
+            return ("$all_R1_fastq $all_R2_fastq","$all_SE_fastq",$avg_read_len);
         }
         elsif ( -s $all_R1_fastq )
         {
             &lprint ("Count Fastq Finished\n");
-            return ("$all_R1_fastq $all_R2_fastq","");
+            return ("$all_R1_fastq $all_R2_fastq","",$avg_read_len);
         }
         elsif ( -s $all_SE_fastq )
         {
             &lprint ("Count Fastq Finished\n");
-            return("","$all_SE_fastq");
+            return("","$all_SE_fastq",$avg_read_len);
         }
     }
     
@@ -2839,32 +2954,46 @@ sub countFastq
     foreach my $pair (@pairedFile)
     {
         my ($R1,$R2) = split /\s+/,$pair;
-        &countPE_exe($R1,$R2,$all_R1_fastq,$all_R2_fastq,$all_SE_fastq,$fh);
+        ($PE_count, $PE_total_len) = &countPE_exe($R1,$R2,$all_R1_fastq,$all_R2_fastq,$all_SE_fastq,$fh);
     }
     foreach my $file (@unpairedFile)
     {
-        my ($SE_count,$SE_total_len)=&countFastq_exe($file,$all_SE_fastq);
+        ($SE_count,$SE_total_len)=&countFastq_exe($file,$all_SE_fastq);
         printf $fh ("%s\t%d\t%d\t%.2f\n",basename($file),$SE_count,$SE_total_len,$SE_total_len/$SE_count);
         printf ("%s\t%d\t%d\t%.2f\n",basename($file),$SE_count,$SE_total_len,$SE_total_len/$SE_count);
     }
     close $fh;
-
+    $avg_read_len = ($PE_count + $SE_count) > 0 ? ($PE_total_len + $SE_total_len) / ($PE_count + $SE_count) : 0 ;
     &printRunTime($time);
     &touchFile("$outputDir/countFastq.finished");
     if ( -s $all_R1_fastq && -e $all_SE_fastq)
     {
-        return ("$all_R1_fastq $all_R2_fastq","$all_SE_fastq");
+        return ("$all_R1_fastq $all_R2_fastq","$all_SE_fastq", $avg_read_len );
     }
     elsif ( -s $all_R1_fastq )
     {
-        return ("$all_R1_fastq $all_R2_fastq","");
+        return ("$all_R1_fastq $all_R2_fastq","",$avg_read_len );
     }
     else
     {
-        return("","$all_SE_fastq");
+        return("","$all_SE_fastq",$avg_read_len );
     }
 }
-
+sub get_avg_read_length{
+    my $fastq_count_file = shift;
+    my $total_count = 0;
+    my $total_len = 0;
+    open (my $fh, "<", $fastq_count_file) or die "Cannot open $fastq_count_file\n";
+    while(<$fh>){
+        chomp;
+        my ($name,$count,$len,$avg) = split /\t/,$_;
+        $total_count += $count;
+        $total_len += $len;
+    }
+    close $fh;
+    my $avg_len = ($total_count > 0)? $total_len/$total_count : 0;
+    return $avg_len;
+}
 sub countPE_exe{
     my $r1=shift;
     my $r2=shift;
@@ -2882,64 +3011,97 @@ sub countPE_exe{
     my $paired_count=0;
     my $read1_total_len=0;
     my $read2_total_len=0;
+    my $existed_id1=0;
+    my $existed_id2=0;
     my ($fh1,$pid) = open_file($r1);
     open (my $ofh1, ">>$out_r1") or die "Cannot write $out_r1\n";
     open (my $ofh2, ">>$out_r2") or die "Cannot write $out_r2\n";
     open (my $ofhse, ">>$out_se") or die "Cannot write $out_se\n";
     while(<$fh1>){
         chomp;
+        next unless $_ =~ /\S/;
+        next if ($_ =~ /length=0/);
         my $id_line=$_;
-        my ($id) = $id_line =~ /^\@(\S+)\s*/;
+        my ($id) = $id_line =~ /^\@(\S+).?\/?1?\s*/;
         my $seq = <$fh1>;
         chomp $seq;
+        if ($seq_hash{$id}){
+            $existed_id1++;
+        }
         my $len = length $seq;
         $read1_total_len += $len;
         my $qual_id = <$fh1>;
         my $qual = <$fh1>;
         $seq = $seq."\n".$qual_id.$qual;
-        $seq_hash{$id}->{seq}=$seq;
-        $seq_hash{$id}->{id}=$id_line;
+        $seq_hash{$id}++;
         $read1_count++;
     }
     close $fh1;
+    my %seq_hash2;
     my ($fh2,$pid2) = open_file($r2);
     while(<$fh2>){
         chomp;
+        next unless $_ =~ /\S/;
+        next if ($_ =~ /length=0/);
         my $id_line=$_;
-        my ($id2) = $id_line =~ /^\@(\S+)\s*/;
+        my ($id2) = $id_line =~ /^\@(\S+)\.?\/?2?\s*/;
         $read2_count++;
         my $seq2 = <$fh2>;
         chomp $seq2;
+        if ($seq_hash2{$id2}){
+            $existed_id2++;
+        }
         my $len = length $seq2;
         $read2_total_len += $len;
         my $qual_id = <$fh2>;
         my $qual = <$fh2>;
         $seq2 = $seq2."\n".$qual_id.$qual;
+        $seq_hash2{$id2}++;
         if ($seq_hash{$id2}){
+            $seq_hash{$id2}++;
             $paired_count++;
-            print $ofh1 $seq_hash{$id2}->{id},"\n",$seq_hash{$id2}->{seq};
             print $ofh2 $id_line,"\n",$seq2;
-            delete $seq_hash{$id2};
         }else{
             print $ofhse $id_line,"\n",$seq2;
             $se2_count++;
         }
     }
-    foreach my $id (keys %seq_hash){
-        print $ofhse $seq_hash{$id}->{id},"\n",$seq_hash{$id}->{seq};
-        $se1_count++;
+    close $fh2;
+    ($fh1,$pid) = open_file($r1);
+    while(<$fh1>){
+        chomp;
+        next unless $_ =~ /\S/;
+        next if ($_ =~ /length=0/);
+        my $id_line=$_;
+        my ($id) = $id_line =~ /^\@(\S+)\.?\/?1?\s*/;
+        my $seq = <$fh1>;
+        chomp $seq;
+        my $qual_id = <$fh1>;
+        my $qual = <$fh1>;
+        $seq = $seq."\n".$qual_id.$qual;
+        if ($seq_hash{$id} == 2){
+                print $ofh1 $id_line,"\n",$seq;
+        }
+        if ($seq_hash{$id} == 1){
+                print $ofhse $id_line,"\n",$seq;
+                $se1_count++;
+        }
     }
+    close $fh1;
+    close $ofh1;
+    close $ofh2;
+    close $ofhse;
     printf ("%s\t%d\t%d\t%.2f\n",basename($r1),$read1_count,$read1_total_len,$read1_total_len/$read1_count);
     printf ("%s\t%d\t%d\t%.2f\n",basename($r2),$read2_count,$read2_total_len,$read2_total_len/$read2_count);
     printf $count_fh ("%s\t%d\t%d\t%.2f\n",basename($r1),$read1_count,$read1_total_len,$read1_total_len/$read1_count);
     printf $count_fh ("%s\t%d\t%d\t%.2f\n",basename($r2),$read2_count,$read2_total_len,$read2_total_len/$read2_count);
-    printf ("There are %d reads from %s don't have corresponding paired read.\n", $se1_count, basename($r1)) if ($se1_count >0);
+    printf ("%d duplicate id from %s\n", $existed_id1, basename($r1)) if ($existed_id1 > 0);
+    printf ("%d duplicate id from %s\n", $existed_id2, basename($r2)) if ($existed_id2 > 0);
+    printf ("There are %d reads from %s don't have corresponding paired read.\n", $se1_count, basename($r1)) if ($se1_count >0); 
     printf ("There are %d reads from %s don't have corresponding paired read.\n", $se2_count, basename($r2)) if ($se2_count >0);
-    close $fh2;
-    close $ofh1;
-    close $ofh2;
-    close $ofhse;
+   
     unlink $out_se if (-z $out_se);
+    return ($read1_count + $read2_count, $read1_total_len + $read2_total_len);
 }
 sub countFastq_exe 
 {
@@ -2952,6 +3114,7 @@ sub countFastq_exe
     while (<$fh>)
     { 
         next unless $_ =~ /\S/;
+	next if ($_ =~ /length=0/);
         my $id=$_;
         $id = '@'."seq_$seq_count\n" if ($id =~ /No name/);
         my $seq=<$fh>;
@@ -2972,7 +3135,7 @@ sub open_file
     my ($file) = @_;
     my $fh;
     my $pid;
-    if ( $file=~/\.gz$/i ) { $pid=open($fh, "gunzip -c $file |") or die ("gunzip -c $file: $!"); }
+    if ( $file=~/\.gz\.?\d?$/i ) { $pid=open($fh, "gunzip -c $file |") or die ("gunzip -c $file: $!"); }
     else { $pid=open($fh,'<',$file) or die("$file: $!"); }
     return ($fh,$pid);
 }
@@ -2984,7 +3147,7 @@ sub runHostRemoval
     my $host=shift;
     my $time=time();
     my $min_score = $configuration->{"bwaMemOptions"} || "-T 50 ";
-    my $ont_flag = ($configuration->{"fastq_source"} =~ /nanopore/)? "-x ont2d ": ""; 
+    my $ont_flag = ($configuration->{"fastq_source"} =~ /nanopore/)? "-x ont2d ": ($configuration->{"fastq_source"} =~ /pacbio/i)? "-x pacbio ": "";  
     $min_score = "-T $configuration->{min_L}" if $ont_flag;
     my $similarity_cutoff = $configuration->{"similarity"} || 90 ;
    # my $stats = "$QCoutDir/hostclean.stats.txt";
@@ -3142,6 +3305,7 @@ sub runReadsToContig
     my $outputDir= "$outDir/AssemblyBasedAnalysis/readsMappingToContig";
     my $r2c_aligner_options = $configuration->{"r2c_aligner_options"} || "";
     my $ont_flag = ($configuration->{"fastq_source"} =~ /nanopore/)? 1 : 0;
+    my $pacbio_flag = ($configuration->{"fastq_source"} =~ /pacbio/i)? 1 : 0;
     my $log="$outputDir/mapping.log";
     &make_dir($outputDir);
     if ($noColorLog)
@@ -3172,11 +3336,14 @@ sub runReadsToContig
     	$parameters .= " -aligner bowtie -bowtie_options ". "'" . $r2c_aligner_options . "'";
     }elsif($configuration->{r2c_aligner} =~ /bwa/){
 	$r2c_aligner_options =~ s/-t\s*\d+//;
+	$parameters =~ s/-u /-long / if $ont_flag or $pacbio_flag;
 	$r2c_aligner_options .= " -x ont2d " if $ont_flag;
+	$r2c_aligner_options .= " -x pacbio " if $pacbio_flag;
     	$parameters .= " -aligner bwa -bwa_options ". "'" . $r2c_aligner_options . "'";
     }elsif($configuration->{r2c_aligner} =~ /minimap/){
-        $parameters =~ s/-u /-long / if $ont_flag;
+        $parameters =~ s/-u /-long / if $ont_flag or $pacbio_flag;
         $r2c_aligner_options =~ s/-t\s*\d+//;
+	$r2c_aligner_options .= " -x map-pb " if $pacbio_flag;
         $parameters .= " -aligner minimap2 -minimap2_options ". "'" . $r2c_aligner_options . "'";
     }
 
@@ -3218,9 +3385,13 @@ sub runReadsToGenome
     my $outVCF = "$outputDir/$outPrefix.vcf";
     my $outGap = "$outputDir/$outPrefix.gaps";
     my $r2g_aligner_options = $configuration->{"r2g_aligner_options"} || "";
+    my $r2g_mapq = (defined $configuration->{"r2g_min_mapq"})? $configuration->{"r2g_min_mapq"} : 42;
     my $ont_flag = ($configuration->{"fastq_source"} =~ /nanopore/)? 1 : 0;
+    my $pacbio_flag = ($configuration->{"fastq_source"} =~ /pacbio/i)? 1 : 0;
     my $variant_call = (defined $configuration->{r2g_variant_call})? (($configuration->{r2g_variant_call})? 1 : 0) : 1;
+    my $variant_call_min_qual = (defined $configuration->{r2g_variant_call_min_qual})? $configuration->{r2g_variant_call_min_qual} : 0;
     my $variant_call_ploidy =  (defined $configuration->{r2g_variant_call_ploidy})? $configuration->{r2g_variant_call_ploidy} : "haploid";
+    my $correct_bed_file;
     &make_dir($outputDir);
     symlink("$outputDir", "$outDir/ReferenceBasedAnalysis/readsMappingToRef");
     if ($noColorLog)
@@ -3244,40 +3415,44 @@ sub runReadsToGenome
     unlink "$outputDir/getConsensus.finished";
 
     my $parameters;    
-    $parameters .= " -pre $outPrefix -cpu $numCPU -consensus 0";
+    $parameters .= " -pre $outPrefix -cpu $numCPU -consensus 0 -disableBAQ";
     if ($configuration->{r2g_aligner} =~ /bowtie/){
         $r2g_aligner_options =~ s/-p\s*\d+//;
-	$parameters .= " -maq 42 " if ! $configuration->{r2g_min_mapq};
     	$parameters .= " -aligner bowtie -bowtie_options ". "'".  $r2g_aligner_options . "'";
     }elsif($configuration->{r2g_aligner} =~ /bwa/){
         $r2g_aligner_options =~ s/-t\s*\d+//;
 	$r2g_aligner_options .= " -x ont2d " if $ont_flag;
-	$parameters .= " -maq 60 " if ! $configuration->{r2g_min_mapq};
+	$r2g_aligner_options .= " -x pacbio " if $pacbio_flag;
     	$parameters .= " -aligner bwa -bwa_options ". "'" . $r2g_aligner_options . "'";
     }elsif($configuration->{r2g_aligner} =~ /minimap/){
-        $parameters =~ s/-u /-long / if $ont_flag;
         $r2g_aligner_options =~ s/-t\s*\d+//;
-	$parameters .= " -maq 60 " if ! $configuration->{r2g_min_mapq};
+	$r2g_aligner_options .= " -x map-pb " if $pacbio_flag;
         $parameters .= " -aligner minimap2 -minimap2_options ". "'" . $r2g_aligner_options . "'";
     }
 
-    $parameters .= " -no_indels -disableBAQ" if $ont_flag;
+    $parameters .= " -no_indels " if $ont_flag; # or $pacbio_flag?
     $parameters .= " -no_snp " if ($variant_call == 0);
+    $parameters .= " -maq  $r2g_mapq ";
     $parameters .= " -ploidy $variant_call_ploidy " if ($variant_call_ploidy);
-    $parameters .= " -min_alt_bases $configuration->{r2g_consensus_min_cov} " if ($configuration->{r2g_consensus_min_cov}); 
+    $parameters .= " -variant_qual $variant_call_min_qual " if ($variant_call_min_qual);
+    $parameters .= " -min_depth $configuration->{r2g_consensus_min_cov} " if ($configuration->{r2g_consensus_min_cov}); 
     $parameters .= " -max_clip $configuration->{r2g_max_clip} " if ($configuration->{r2g_max_clip});
     if ( $configuration->{r2g_align_trim_bed_file} and &is_bed6_plus($configuration->{r2g_align_trim_bed_file}) ){
+	$correct_bed_file = "$outputDir/".basename($configuration->{r2g_align_trim_bed_file});
+	&correct_bed_ref($configuration->{r2g_align_trim_bed_file}, $correct_bed_file);
 	my $alignTrim_parameters = $parameters;
         $alignTrim_parameters .= " -p \'$pairFile\'" if ($pairFile);
         $alignTrim_parameters .= " -u $unpairFile" if ( -s $unpairFile);
+	$alignTrim_parameters=~ s/-u /-long / if ($ont_flag or $pacbio_flag) and $configuration->{r2g_aligner} =~ /minimap/;
 	my $mapping_command = "perl $RealBin/scripts/runReadsToGenome.pl -d $outputDir/AlignTrimMapping $alignTrim_parameters";
-    	($pairFile, $unpairFile)=&getAlignTrimReads($mapping_command,$referenceFile_r, $ref_headers, $log, $outputDir);
+    	($pairFile, $unpairFile, my $AlignTrim_ref)=&getAlignTrimReads($mapping_command,$referenceFile_r, $ref_headers, $log, $outputDir,$correct_bed_file);
     }
 	    
     $parameters .= " -ref $referenceFiles";
     $parameters .= " -p \'$pairFile\'" if ($pairFile);
     $parameters .= " -u $unpairFile" if ( -s $unpairFile);
-    my $command = "perl $RealBin/scripts/runReadsToGenome.pl -d $outputDir $parameters 1>$log 2>\&1 ";
+    $parameters=~ s/-u /-long / if ($ont_flag or $pacbio_flag) and $configuration->{r2g_aligner} =~ /minimap/;
+    my $command = "perl $RealBin/scripts/runReadsToGenome.pl -skip_aln -d $outputDir $parameters 1>>$log 2>\&1 ";
     if ( ! -e "$outputDir/runReadsToGenome.finished" ){
       &lprint ("  Running \n  $command \n");
       &executeCommand($command);
@@ -3286,11 +3461,14 @@ sub runReadsToGenome
     }
     if ($configuration->{r2g_align_trim_bed_file}){
         # ampilcon coverage plot
-	my ($bed_prefix,$bed_dir,$bed_suffix) = fileparse($configuration->{r2g_align_trim_bed_file},".bed");
-        my $bed_file_flag = (-e "$bed_dir/$bed_prefix.bedpe")? "--bedpe $bed_dir/$bed_prefix.bedpe":"--bed $configuration->{r2g_align_trim_bed_file}";
-        my @cov_files = glob("$outputDir/*coverage");
-        foreach my $cov_f (@cov_files){
-               $command = "$RealBin/scripts/amplicon_coverage.py --outdir $outputDir --cov $cov_f $bed_file_flag";
+	my $bed_file_flag = ($correct_bed_file =~ /bedpe/ )? "--bedpe $correct_bed_file":"--bed $correct_bed_file";
+        my @cov_files = glob("$outputDir/AlignTrimMapping/*coverage");
+        foreach my $cov_f (@cov_files){ 
+               my $refID = ($cov_f =~ /readsToRef_(\S+).coverage/) ? "--refID $1": "";
+               my $gff = (-e "$outDir/Reference/reference.gff")? "--gff $outDir/Reference/reference.gff" : "";
+	       my $mincov = ( $configuration->{r2g_consensus_min_cov} )?  $configuration->{r2g_consensus_min_cov} : 5;
+	       $command = "$RealBin/scripts/amplicon_coverage.py --mincov $mincov --count_primer --outdir $outputDir --cov $cov_f $gff $refID $bed_file_flag";
+
                &executeCommand($command);
         }
 
@@ -3320,16 +3498,23 @@ sub runReadsToGenome
         my $con_min_baseQ = $configuration->{r2g_consensus_min_baseQ} || 20;
         my $con_disable_BAQ = $configuration->{r2g_consensus_disable_BAQ};
         my $con_pcr_dedup = ($configuration->{r2g_consensus_pcr_dedup})? "1":"0";
+	my $con_homopolymer_filter = ($configuration->{r2g_consensus_homopolymer_filter})? "1":"0";
+        my $con_strandbias_filter = ($configuration->{r2g_consensus_strandbias_filter})? "1":"0";
+	my $con_varlog_opt = ($configuration->{r2g_consensus_varlog_opt})? "1":"0";
 	my $con_comp_opt = ($configuration->{r2g_consensus_comp_opt})? "1":"0";
-	    foreach my $file (@$referenceFile_r){
+	foreach my $file (@$referenceFile_r){
             &make_dir("$outputDir/consensus_tmp");
             my ($file_name, $file_path, $file_suffix)=fileparse("$file", qr/\.[^.]*/);
             my $bamFile = "$outputDir/$file_name.sort.bam";
             &correct_fasta_header("$file","$outputDir/consensus_tmp/${file_name}.fa");
-            $command = "export PATH=$RealBin/thirdParty/Anaconda3/bin:\$PATH; cd $outputDir && $RealBin/bin/reference-based_assembly/consensus_fasta.py --procs=$numCPU -b $bamFile -r $outputDir/consensus_tmp/$file_name.fa -o ${file_name}_consensus --temp=consensus_tmp ";
+            $command = "export PATH=$RealBin/thirdParty/Mambaforge/bin:\$PATH; cd $outputDir && $RealBin/bin/reference-based_assembly/consensus_fasta.py --procs=$numCPU -b $bamFile -r $outputDir/consensus_tmp/$file_name.fa -o ${file_name}_consensus --temp=consensus_tmp ";
 	    $command .= " --comp " if ($con_comp_opt);
+	    $command .= " --filterHomopolymer " if ($con_homopolymer_filter);
+            $command .= " --filterStrandBias " if ($con_strandbias_filter);
+            $command .= " --varlog " if ($con_varlog_opt);
             $command .= " --disableBAQ" if ($con_disable_BAQ);
             $command .= " --NOpcrDedup" if (!$con_pcr_dedup);
+	    $command .= " --bed $correct_bed_file " if ( $configuration->{r2g_align_trim_bed_file} and &is_bed6_plus($configuration->{r2g_align_trim_bed_file}) );
             $command .= " --useAnomPairs --mapQ=$con_min_mapQ --maxCov=$con_max_cov --propThresh=$con_alt_prop --covThresh=$con_min_cov --baseQual=$con_min_baseQ --INDELpropThresh=$con_altIndel_prop  >> $consensus_log";
             &lprint ("  Running \n  $command \n");
             &executeCommand($command);
@@ -3359,15 +3544,18 @@ sub getAlignTrimReads{
 	my $ref_headers = shift;
 	my $log = shift;
 	my $outputDir = shift;
+	my $bed_file = shift;
 	my $pairFile;
 	my $unpairFile;
+	my $ont_flag = ($configuration->{"fastq_source"} =~ /nanopore/)? 1 : 0;
+	my $pacbio_flag = ($configuration->{"fastq_source"} =~ /pacbio/)? 1 : 0;
 	my $AlignTrim_ref = @$ref_r[0];
-	if ($configuration->{r2g_align_trim_bed_file} =~ /artic_ncov|SC2_200324/){
+	if ($bed_file =~ /artic_ncov|SC2_200324|swift_primer_schemes_v2/){
 		if (my ($NC_044512_ref) = grep $_ =~ /NC_045512|MN908947/, @$ref_r) {
 			$AlignTrim_ref = $NC_044512_ref;
 		}
 	}else{
-		open (my $fh, "<", $configuration->{r2g_align_trim_bed_file}) or die "Cannot open Bed file\n";
+		open (my $fh, "<", $bed_file) or die "Cannot open Bed file\n";
 		my $ref_id;
 		while(<$fh>){
 			next if /^#/;
@@ -3376,18 +3564,21 @@ sub getAlignTrimReads{
 			last if $ref_id;
 		}
 		close $fh;
-		if (my ($align_trim_ref) = grep $_ =~ /$ref_id/, @$ref_headers) {
-			$AlignTrim_ref = $align_trim_ref;
+		if (my ($align_trim_ref_index) = grep $_ =~ /$ref_id/, 0..$#{$ref_headers}) {
+			$AlignTrim_ref = $ref_r->[$align_trim_ref_index];
 		} 
 	}
-	$cmd .= " -align_trim_bed_file $configuration->{r2g_align_trim_bed_file} -ref $AlignTrim_ref -no_snp -no_plot";
+	$cmd .= " -align_trim_bed_file $bed_file -ref $AlignTrim_ref -no_snp -no_plot";
+	$cmd .= " -align_trim_strand " if ! $ont_flag and ! $pacbio_flag;
 	&lprint ("  ## Align Trimmed Ref: $AlignTrim_ref \n");
 	&lprint ("  ## Get Align Trimmed Reads \n");
 	$cmd .= " 1>$log 2>\&1";
 	&executeCommand($cmd);
 	my @align_trim_bam_file = glob("$outputDir/AlignTrimMapping/*bam");
-	my $extract_reads_cmd = "perl $RealBin/scripts/bam_to_fastq.pl -prefix $outputDir/AlignTrimMapping/AlignTrimmedReads $align_trim_bam_file[0]";
+	my $extract_reads_cmd = "perl $RealBin/scripts/bam_to_fastq.pl -remove_softclip -prefix $outputDir/AlignTrimMapping/AlignTrimmedReads $align_trim_bam_file[0]";
 	&executeCommand($extract_reads_cmd);
+	move($_,"$outputDir/") for @align_trim_bam_file;
+	move($_, "$outputDir/") for glob("$outputDir/AlignTrimMapping/*bai");
 	if ( -s "$outputDir/AlignTrimMapping/AlignTrimmedReads.1.fastq"){
 		$pairFile = "$outputDir/AlignTrimMapping/AlignTrimmedReads.1.fastq $outputDir/AlignTrimMapping/AlignTrimmedReads.2.fastq";
 	}
@@ -3397,7 +3588,7 @@ sub getAlignTrimReads{
 	if ( ! $pairFile and ! $unpairFile){
 		die "failed: No reads remain after align trim. Please see $log\n";
 	}
-	return ($pairFile,$unpairFile);
+	return ($pairFile,$unpairFile,$AlignTrim_ref);
 }
 
 sub runContigToGenome
@@ -3660,6 +3851,11 @@ sub runAssembly
             $cmd .= "--sc " if ($configuration->{SpadesAlgorithm} =~/singlecell/);
             $cmd .= "--rna " if ($configuration->{SpadesAlgorithm} =~ /rna/);
             $cmd .= "--plasmid " if ($configuration->{SpadesAlgorithm} =~ /plasmid/);
+            $cmd .= "--bio " if ($configuration->{SpadesAlgorithm} =~ /bio/);
+            $cmd .= "--corona " if ($configuration->{SpadesAlgorithm} =~ /corona/);
+            $cmd .= "--metaviral " if ($configuration->{SpadesAlgorithm} =~ /metaviral/);
+            $cmd .= "--metaplasmid " if ($configuration->{SpadesAlgorithm} =~ /metaplasmid/);
+            $cmd .= "--rnaviral " if ($configuration->{SpadesAlgorithm} =~ /rnaviral/);
             $cmd .= "--s1 $unpairFile " if (-s $unpairFile);
             $cmd .= "--pacbio $pacbio_file " if ( -s $pacbio_file && (is_fasta($pacbio_file) || is_fastq($pacbio_file)));
             $cmd .= "--nanopore $nanopore_file " if ( -s $nanopore_file && (is_fasta($nanopore_file) || is_fastq($nanopore_file)));
@@ -3687,6 +3883,7 @@ sub runAssembly
         my $long_reads_file = $configuration->{unicycler_lreads_file};
         my $unicycler_min_lreads = $configuration->{unicycler_min_lreads} || "2000";
         my $filtered_long_reads = "$AssemblerOutDir/long_reads.fasta";
+	my $bridging_mode = $configuration->{unicycler_mode} || "normal";
         ## filter long reads 
         if ( -s $long_reads_file){
             &lprint("Filter long reads with $unicycler_min_lreads (bp) cutoff \n");
@@ -3694,14 +3891,15 @@ sub runAssembly
             &executeCommand("seqtk seq -A -L $unicycler_min_lreads  $long_reads_file > $filtered_long_reads");
         }
 	
-        $cmd = "export _JAVA_OPTIONS='-Xmx20G'; export TERM='xterm'; $RealBin/thirdParty/Anaconda3/bin/unicycler -t $numCPU -o $AssemblerOutDir ";
-	$cmd .= "--pilon_path $RealBin/thirdParty/pilon-1.23.jar ";
+        $cmd = "export _JAVA_OPTIONS='-Xmx20G'; export TERM='xterm'; $RealBin/thirdParty/Mambaforge/bin/unicycler -t $numCPU -o $AssemblerOutDir ";
+	#$cmd .= "--pilon_path $RealBin/thirdParty/pilon-1.23.jar ";
         if ($pairFile){
             my ($p1,$p2) = split /\s+/,$pairFile;
             $cmd .= "-1 $p1 -2 $p2 ";
         }
         $cmd .= "-s $unpairFile " if (-s $unpairFile);
         $cmd .= "-l $filtered_long_reads " if (-s $filtered_long_reads);
+	$cmd .= "--mode $bridging_mode ";
         $cmd .= " 2>&1 1>/dev/null";
     }
     if ($assembler =~ /lrasm/){
@@ -3776,7 +3974,7 @@ sub runAssembly
 
     # clean up
     remove_tree("$AssemblerOutDir");
-    unlink "core";
+    unlink "core*";
 
     &printRunTime($time);
     &touchFile("$outputDir/runAssembly.finished");
@@ -3936,16 +4134,37 @@ sub runIdbaAssembly
     unlink $short_pairFastaFile;
     unlink $short_unpairFastaFile;
     unlink $long_reads;
-    unlink "core";
+    unlink "core*";
     &printRunTime($time);
     &touchFile("$outputDir/runIdbaAssembly.finished");
     return ($contig_file, $contig_for_annotation);
+}
+
+sub correct_bed_ref{
+    my $bed = shift;
+    my $output_bed = shift;
+    open (my $fh, "<", $bed);
+    open (my $ofh , ">", $output_bed);
+    while (<$fh>){
+        chomp;
+       if ($_ =~ /^#/){
+            print $ofh $_,"\n";
+       }else{
+           my @array = split/\t/,$_;
+           $array[0] =~ s/\W/_/g;
+           print $ofh join("\t",@array),"\n";
+       }
+    }
+    close $fh;
+    close $ofh;
 }
 
 sub correct_fasta_header {
 	my $fasta = shift;
 	my $output_fasta = shift;
 	my @headers;
+	my %id_check;
+	my $num=1;
 	open (my $fh, "<", $fasta);
 	open (my $ofh , ">", $output_fasta);
 	while (<$fh>){
@@ -3956,6 +4175,13 @@ sub correct_fasta_header {
 			my $desc = $2;
 			$id =~ s/\W/_/g;
 			push @headers, $id;
+			if ($id_check{$id}){
+				&lprint("There is duplicate fasta header unique id (first non space word). $id\n");
+				$id = $id . "_$num";
+				$num += 1;
+			}else{
+				$id_check{$id}="$id $desc";
+			}
 			print $ofh ">".$id." $desc\n";
 		}else{
 			print $ofh $_,"\n";
@@ -4053,6 +4279,7 @@ sub SNPtree
     my $PhaME_tool_dir="$RealBin/scripts/PhaME";
     my $phyloXML_annotation_file = "$outputDir/annotation.txt";
     my $ont_flag = ($configuration->{"fastq_source"} =~ /nanopore/)? 1 : 0;
+    my $pacbio_flag = ($configuration->{"fastq_source"} =~ /pacbio/i)? 1 : 0;
     my $log = "$outputDir/log.txt";
    
     if ($noColorLog)
@@ -4094,7 +4321,7 @@ sub SNPtree
      $cmd .= "-p $pair_read " if ($pair_read);
      $cmd .= "-c $contig " if ($contig); 
      $cmd .= "-s $single_end_read " if ( $single_end_read && -s $single_end_read); 
-     $cmd .= "-nanopore " if ($ont_flag);
+     $cmd .= "-nanopore " if ($ont_flag or $pacbio_flag);
      $cmd .= "  >> $log"; 
     &lprint (" Prepare SNP phylogeny\n"); 
     &lprint (" Running \n $cmd\n");
@@ -4375,7 +4602,7 @@ sub checkFileAndDir
     {
         if (scalar(@pairedReadsFile) % 2) { Usage("Please check paired data input are even file numbers\n") ;}
 	for my $i (0..$#pairedReadsFile){
-            if ($pairedReadsFile[$i] =~ /^http|ftp/i)
+            if ($pairedReadsFile[$i] =~ /^http|^ftp/i)
             { 
                 push @download_url, $pairedReadsFile[$i];
                 my $filename = &getFilenameFromURLHeader($pairedReadsFile[$i]);
@@ -4386,7 +4613,7 @@ sub checkFileAndDir
     if (@unpairedReadsFile)
     {
 	for my $i (0..$#unpairedReadsFile){
-            if ($unpairedReadsFile[$i] =~ /^http|ftp/i)
+            if ($unpairedReadsFile[$i] =~ /^http|^ftp/i)
             { 
                 push @download_url, $unpairedReadsFile[$i];
                 my $filename = &getFilenameFromURLHeader($unpairedReadsFile[$i]);
@@ -4394,7 +4621,7 @@ sub checkFileAndDir
             }
 	}
     }
-    if ($inputContigs =~ /^http|ftp/i){
+    if ($inputContigs =~ /^http|^ftp/i){
         push @download_url, $inputContigs;
         my $filename = &getFilenameFromURLHeader($inputContigs);
         $inputContigs = "$outDir/DownloadedReads/$filename";
@@ -4533,6 +4760,7 @@ sub is_bed6_plus{
     my $is_bed=0;
     for ($count..$check_num){
         my $line=<$fh>;
+	next if !$line;
         next if $line =~ /^#/;
         my @col = split /\t/,$line;
         if (scalar(@col) >= 6 and $col[1] =~ /^\d+$/ and  $col[2] =~ /^\d+$/ and $col[4] =~ /^\d+$/){
@@ -4685,6 +4913,7 @@ sub writeJBrowseInfo
     my $contigTax="$outDir/AssemblyBasedAnalysis/Taxonomy/${project_name}.lca_ctg.tsv";
     my $ARGenesGFF="$outDir/AssemblyBasedAnalysis/SpecialtyGenes/${project_name}_AR_genes_rgi.gff";
     my $VFGenesGFF="$outDir/AssemblyBasedAnalysis/SpecialtyGenes/${project_name}_VF_genes_ShortBRED.gff";
+    my $r2g_mapq = (defined $configuration->{"r2g_min_mapq"})? $configuration->{"r2g_min_mapq"} : 42;
     &make_dir($outputDir);
     if ($noColorLog)
     {
@@ -4703,10 +4932,10 @@ sub writeJBrowseInfo
     unlink "$outputDir/writeJBrowseInfo.finished";
     
     my $project_name=basename($abs_outDir);
+    my $correct_bed_file = "$outDir/ReadsBasedAnalysis/readsMappingToRef/".basename($configuration->{r2g_align_trim_bed_file}) if ($configuration->{r2g_align_trim_bed_file});
     my $cmd="$RealBin/scripts/edge2jbrowse_converter.pl ";
     $cmd .= "--bam-file-depth $configuration->{JBrowse_bam_min_depth} " if ($configuration->{JBrowse_bam_min_depth});
-    $cmd .= "--bam-file-maq 42 " if ($configuration->{r2g_aligner} =~ /bowtie/);
-    $cmd .= "--bam-file-maq 60 " if ($configuration->{r2g_aligner} =~ /bwa|minimap/);
+    $cmd .= "--bam-file-maq $r2g_mapq ";
     $cmd .= "--in-ref-fa '$referenceGenome' " if ($referenceGenome);
     $cmd .= "--in-ctg-fa $contig_for_annotation_file " if ($contig_for_annotation_file);
     $cmd .= "--in-ctg-anno-gff3 '$annotationGFF' " if ($annotationGFF);
@@ -4714,7 +4943,7 @@ sub writeJBrowseInfo
     $cmd .= "--in-ref-gff3 '$gff3File' " if ($gff3File);
     $cmd .= "--in-orf-ar-gff3 '$ARGenesGFF' " if ( -e "$ARGenesGFF");
     $cmd .= "--in-orf-vf-gff3 '$VFGenesGFF' " if ( -e "$VFGenesGFF");
-    $cmd .= "--in-primer2ref-bed '$configuration->{r2g_align_trim_bed_file}' " if ($configuration->{r2g_align_trim_bed_file});
+    $cmd .= "--in-primer2ref-bed '$correct_bed_file' " if ($configuration->{r2g_align_trim_bed_file});
     $cmd .= "--threads $numCPU ";
     $cmd .= "--proj_outdir '$abs_outDir' 2>\&1 1>$log";
 

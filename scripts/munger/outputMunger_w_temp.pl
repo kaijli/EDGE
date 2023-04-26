@@ -90,8 +90,8 @@ output_html();
 
 sub pull_antismash{
 	my $output_dir = "$out_dir/AssemblyBasedAnalysis/AntiSmash";
-	if(-e "$output_dir/index.html"){
-		 $vars->{AntiSmash_OUT_INDEX} = "$output_dir/index.html";
+	if(-e "$output_dir/output/index.html"){
+		 $vars->{AntiSmash_OUT_INDEX} = "$output_dir/output/index.html";
 	}
 }
 
@@ -106,6 +106,7 @@ sub pull_qiime{
 		open(my $fh, "<", $log);
 		while(<$fh>){
 			if ($_ =~ /error|failed/i){
+				next if $_ =~ /error-correction/;
 				my $line = $_;
                                 $line =~ s/'$//;
                                 $line =~ s/\\n\\n/<br>/g;
@@ -127,6 +128,26 @@ sub pull_qiime{
 
 sub pull_piret{
 	my  $output_dir = "$out_dir/ReferenceBasedAnalysis/Piret";
+	my $log = "$output_dir/piret_log.txt";
+	if (-e "$log"){
+		$vars->{PIRET_OUT_PROCESSLOG} = "$log";
+		open(my $fh, "<", $log);
+		while(<$fh>){
+			if ($_ =~ /error|failed|not exist/i){
+				next if $_ =~ /error-correction/;
+				my $line = $_;
+                                $line =~ s/'$//;
+                                $line =~ s/\\n\\n/<br>/g;
+                                $line =~ s/\\n/<br>/g;
+                                $line =~ s/$www_root\///;
+				$line =~ s/$out_dir\///;
+                                $line =~ s/b''?//g;
+				$vars->{ERROR_piret} .= $line;
+				last;
+			}
+		}
+	        close $fh;
+	}
 #	return unless -e "$output_dir/runPiret.finished";
 	my $edgeR=0;
 	my $ballgown=0;
@@ -194,6 +215,7 @@ sub pull_piret{
 	my $qc_summary = "$output_dir/processes/qc/QCsummary.csv";
 	if ( -e $qc_summary){
 		my @QC_result;
+		my $undefind_sample_idx = $sample_idx;
 		open( my $fh2, "<", $qc_summary );
 		while(<$fh2>){
 			chomp;
@@ -209,7 +231,8 @@ sub pull_piret{
 				#$qcinfo->{"PIRETQCRAW"}=$temp[2];
 				#$qcinfo->{"PIRETQCQC"}=$temp[3];
 				my $array_index=$samples{$temp[0]}->{index};
-				$QC_result[$array_index]=$qcinfo;
+				$QC_result[$array_index]=$qcinfo if defined $array_index;
+				$QC_result[$undefind_sample_idx++]=$qcinfo if ! defined $array_index;
 			}
 		
 		}
@@ -220,6 +243,7 @@ sub pull_piret{
 	my $map_summary =  "$output_dir/processes/mapping/MapSummary.csv";
 	if ( -e $map_summary){
 		my @mapping_result;
+		my $undefind_sample_idx = $sample_idx;
 		open (my $mfh,"<",$map_summary );
 		while(<$mfh>){
 			chomp;
@@ -231,7 +255,8 @@ sub pull_piret{
 					$msinfo->{"PIRETMAP$i"}=$temp[$i];
 				}
 				my $array_index=$samples{$temp[0]}->{index};
-				$mapping_result[$array_index]=$msinfo;
+				$mapping_result[$array_index]=$msinfo if defined $array_index;
+				$mapping_result[$undefind_sample_idx++]=$msinfo if ! defined $array_index;
 			}
 		}
 		close $mfh;
@@ -306,8 +331,8 @@ sub pull_piret{
 							my $grid_index = $i % 4 ;
 							my ($file_name, $file_path, $file_suffix)=fileparse("$MD_plots[$i]", qr/\.[^.]*/);
 							(my $sig_file_name = $file_name) =~ s/__MD/__sig/;
-							my $sig_file = "$file_path/$sig_file_name.csv";
-							my $sig_json = "$file_path/$sig_file_name.json";
+							my $sig_file = "$file_path" . "../$sig_file_name.csv";
+							my $sig_json = "$file_path" . "../$sig_file_name.json";
 							if ( -e $sig_file && ! -e $sig_json) {
 								system("perl", "$RealBin/../tab2Json_for_dataTable.pl","-mode","feature_count","-delimit","comma","-out",$sig_json,$sig_file);
 									}
@@ -451,7 +476,7 @@ sub tab2json{
 	close $cfh;
 	my $json = to_json($info);
 	if ($json){
-		open (my $ofh, ">", $json_output);
+		open (my $ofh, ">", $json_output) or die "Cannot open $json_output\n";
 		print $ofh $json;
 		close $ofh;
 	}	
@@ -727,7 +752,7 @@ sub pull_sampleMetadata {
 		}
         	close CONF;
 		pull_other();
-        	if($vars->{SMD_TYPE} eq "human") {
+        	if($vars->{SMD_TYPE} and $vars->{SMD_TYPE} eq "human") {
 				pull_travels();
 				pull_symptoms();
 		}
@@ -1638,15 +1663,15 @@ sub pull_taxa {
 			### calculate classified reads
 			my $toolname = $row->{CPTOOL};
 			my $creads = 0; #classified reads
-			my $cur_level ="";
+			my $cur_level =$row->{CPRANK};
 			my $abu_list = "$vars->{CPDIR}/1_$reads_type/$row->{CPTOOL}/$reads_type-$row->{CPTOOL}.list.txt"; 
 			if ( -e $abu_list){
 				open LIST, $abu_list or die $!;
 				while(<LIST>){
 					next if /^LEVEL/;
 					my @temp = split /\t/, $_;
-					$cur_level ||= $temp[0];
-					last if $cur_level ne $temp[0];
+					#$cur_level ||= $temp[0];
+					next if $cur_level ne $temp[0];
 
 					my $mapped_reads = $temp[2];
 					if( $toolname =~ /gottcha-/i ){
@@ -1684,6 +1709,7 @@ sub pull_taxa {
 					my $res_row;
 					
 					if( $t[0] eq "species"){
+					#if( $t[0] =~ /genus|species|strain/){
 						$res_row->{CPABU_LVL} = $t[0];
 						$res_row->{CPABU_TAX} = ($t[1] =~ /unclassied|unassign/i or $t[1] eq "NA" )? $t[1]:
 									"<a href=\'http://www.ncbi.nlm.nih.gov/genome/?term=\"$t[1]\"\' target='_blank'>$t[1]</a>";
@@ -1715,6 +1741,11 @@ sub pull_taxa {
 							$res_row->{CPABU_ABU} = sprintf "%.1f", ($t[14]*100);
 							$res_row->{CPABU_DOWNLOAD_TAX_ID} = $t[4];
 							#$res_row->{PANGIA_VIS_LINK} = "pangia-vis?r=pangia-vis/data/$projname.tsv";
+						}
+						elsif( $toolname =~ /diamond/){
+							$res_row->{CPABU_REA} = _reformat_val($t[5]);
+							$res_row->{CPABU_ABU} = sprintf "%.1f", ($t[5]*100);
+							$res_row->{CPABU_DOWNLOAD_TAX_ID} = $t[4];
 						}
 						elsif( $toolname =~ /metaphlan/ ){
 							$res_row->{CPABU_REA} = "N/A";
@@ -1760,7 +1791,7 @@ sub pull_taxa {
 
 			$tool->{CPTOOL_TREE}  = "" unless -e $tool->{CPTOOL_TREE};
 			$tool->{CPTOOL_KRONA} = "" unless -e $tool->{CPTOOL_KRONA};
-			$tool->{CPABU_DOWNLOAD_LIST} = 1 if ($row->{CPTOOL}=~/gottcha|bwa|pangia|centrifuge|kraken/);
+			$tool->{CPABU_DOWNLOAD_LIST} = 1 if ($row->{CPTOOL}=~/gottcha|bwa|pangia|centrifuge|kraken|diamond/);
 
 			if( $row->{CPTOOL}=~/pangia/ ){
 				my $sys_pvis_dir="$ENV{'EDGE_HOME'}/thirdParty/pangia/pangia-vis/data";
@@ -1821,6 +1852,10 @@ sub pull_readmapping_ref {
 	my $ref_display_limit_plot = 4;
 	my $ref;
 	my $proj_realname = $vars->{PROJNAME};
+	my $SNPs_report = "$out_dir/ReadsBasedAnalysis/readsMappingToRef/readsToRef.SNPs_report.txt";
+	my $SNPs_report_json = "$out_dir/ReadsBasedAnalysis/readsMappingToRef/readsToRef.SNPs_report.json";
+	my $indels_report = "$out_dir/ReadsBasedAnalysis/readsMappingToRef/readsToRef.Indels_report.txt";
+	my $indels_report_json = "$out_dir/ReadsBasedAnalysis/readsMappingToRef/readsToRef.Indels_report.json";
 
 	open(my $reffh, "<", "$out_dir/ReadsBasedAnalysis/readsMappingToRef/readsToRef.alnstats.txt") or die $!;
 	while(<$reffh>) {
@@ -1869,6 +1904,12 @@ sub pull_readmapping_ref {
 		}
 	}
 	close($reffh);
+	if ( -e $indels_report and ! -e $indels_report_json){
+		system("perl", "$RealBin/../tab2Json_for_dataTable.pl","-out",$indels_report_json,$indels_report);
+	}
+	if ( -e $SNPs_report and ! -e $SNPs_report_json){
+		system("perl", "$RealBin/../tab2Json_for_dataTable.pl","-out",$SNPs_report_json,$SNPs_report);
+	}
 	#$vars->{RMAVEFOLD} = sprintf "%.2f", $tol_mapped_bases/$tol_ref_len;
 	#$vars->{RMREFCOV} = sprintf "%.2f", $tol_non_gap_bases/$tol_ref_len*100;
 	#$vars->{RMSNPS} = $tol_snps;
@@ -1897,7 +1938,8 @@ sub pull_readmapping_ref {
 	$vars->{RMREFTOLREFHASHIT} = $tol_ref_hashit;
 	$vars->{RMREFTABLENOTE} = "Only top $ref_display_limit results in terms of \"Base Recovery %\" are listed in the table." if $tol_ref_number > $ref_display_limit;
 	$vars->{RMREFSNPFILE}     = 0;
-	$vars->{RMREFSNPFILE}     = 1 if -e "$out_dir/ReadsBasedAnalysis/readsMappingToRef/readsToRef.SNPs_report.txt";
+	$vars->{RMREFSNPFILE}     = 1 if -e "$SNPs_report";
+	$vars->{RMREFINDELFILE}   = 1 if -e "$indels_report";
 	$vars->{RMREFGAPFILE}     = 1 if -e "$out_dir/ReadsBasedAnalysis/readsMappingToRef/GapVSReference.report.json";
 	$vars->{RMREFVARCALL}     = 1 if -e "$out_dir/ReadsBasedAnalysis/readsMappingToRef/readsToRef.vcf";
 	$vars->{RMREFCONSENSUS_SW}= 1 if -e "$out_dir/ReadsBasedAnalysis/readsMappingToRef/consensus.log";
@@ -2013,6 +2055,14 @@ sub pull_summary {
 		}
 		if (/^assembler=(.*)/){
 			$vars->{ASSEMBLER}=$1;
+		}
+		if (/fastq_source=(.*)/){
+			my $fastq_source = $1;
+			$vars->{FROMPLATFORM} = ucfirst($fastq_source);
+			$vars->{PACBIODATA} = 1 if $fastq_source =~ /pacbio/i;
+		}
+		if (/r2g_aligner=(.*)/){
+			$vars->{RMREFALIGNER}=$1;
 		}
 		if (/^assembledContigs=(.*)/){
 			$vars->{ASSEMBLEDCONTIG}=$1;
@@ -2131,7 +2181,7 @@ sub pull_summary {
 			$prog->{$ord}->{GNLSTATUS} = "<span class='edge-fg-orange'>Running</span>";
 			$vars->{PROJSTATUS} = "<span class='edge-fg-orange'>Running</span>";
 		}
-		elsif( /failed/ ){
+		elsif( /failed|error/i ){
 			$prog->{$ord}->{GNLSTATUS} = "<span class='edge-fg-red'>Failed</span>";
 			$vars->{PROJSTATUS} = "<span class='edge-fg-red'>Failure</span>";
 			$vars->{PROJSTATUS} = "<span class='edge-fg-red'>Failure. The process has failed unexpectedly. Please contact system administrator. Or try to rerun the job</span>" if (/Unexpected exit/);
@@ -2169,7 +2219,8 @@ sub pull_summary {
 	if ($vars->{LOG_qiime_SW}){
 		open PROC_CUR, "<", "$out_dir/QiimeAnalysis/processLog.txt" or die $!;
 	}else{
-		open PROC_CUR, "<", "$out_dir/process_current.log" or die $!;
+		my $log = ( -e "$out_dir/process_current.log")? "$out_dir/process_current.log": "$out_dir/process.log";
+		open PROC_CUR, "<", "$log" or die $!;
 	}
 	while(<PROC_CUR>) {
 		chomp;
@@ -2196,6 +2247,9 @@ sub pull_summary {
 		elsif(/ERROR|failed/ and $vars->{LOG_qiime_SW}){
 			$prog->{$ord}->{GNLSTATUS}   = "<span class='edge-fg-red'>Error</span>";
 			$vars->{ERROR_qiime} = $_ if (/ERROR/i and $step ne "Checking Mapping File");
+		}
+		elsif(/ERROR|failed/ and $vars->{OUT_piret_SW}){
+			$vars->{ERROR_piret} .= $_ if (/ERROR/i);
 		}
 		elsif( /^Qiime Running time: (.*)/){
 			$prog->{$ord}->{GNLSTATUS}   = "Complete";

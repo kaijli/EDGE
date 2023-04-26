@@ -50,6 +50,7 @@ my $domain	= $ENV{'HTTP_HOST'};
 my $EDGE_HOME = $ENV{EDGE_HOME};
 $EDGE_HOME ||= "$RealBin/../..";
 $ENV{PATH} = "$EDGE_HOME/bin:$ENV{PATH}";
+$ENV{PERL5LIB} = ($ENV{PERL5LIB})? "$EDGE_HOME/lib:$EDGE_HOME/lib/perl5:$EDGE_HOME/lib/perl5/x86_64-linux-thread-multi:$ENV{PERL5LIB}":"$EDGE_HOME/lib:$EDGE_HOME/lib/perl5:$EDGE_HOME/lib/perl5/x86_64-linux-thread-multi";
 
 $pname      ||= $ARGV[0];
 $action     ||= $ARGV[1];
@@ -221,8 +222,11 @@ if( $action eq 'empty' ){
 		$info->{INFO} = "ERROR: Project $real_name is running.";
 		&returnStatus();
 	}
-
-	if( -d $proj_dir ){
+	if( $sys->{user_management} && !$projCode ){
+		$info->{INFO} = "ERROR: Project code cannot be found fron $pname";
+		&returnStatus();
+	}
+	if( $pname && -d $proj_dir ){
 		my @trash;
 		opendir(BIN, $proj_dir) or die "Can't open $proj_dir: $!";
 		while( defined (my $file = readdir BIN) ) {
@@ -306,8 +310,12 @@ elsif( $action eq 'delete' ){
 		$info->{INFO} = "ERROR: Permission denied. Only project owner can perform this action.";
 		&returnStatus();
 	}
+	if( $sys->{user_management} && !$projCode ){
+		$info->{INFO} = "ERROR: Project code cannot be found fron $pname";
+		&returnStatus();
+	}
 
-	if( -d $proj_dir ){
+	if( $pname && -d $proj_dir ){
 		#update project list
 		$info->{STATUS} = "FAILURE";
 		$info->{INFO}   = "Failed to delete the output directory.";
@@ -356,8 +364,8 @@ elsif( $action eq 'delete' ){
 			open STDIN, "</dev/null";
  			open STDOUT, ">/dev/null";
 			open STDERR, ">/dev/null";
-			remove_tree($proj_dir);
-			remove_tree("$out_dir/$pname") if ( -d "$out_dir/$pname");
+			remove_tree($proj_dir) if ($proj_dir ne $out_dir);
+			remove_tree("$out_dir/$pname") if ( $pname && -d "$out_dir/$pname");
 			exit;
 		}
 		unlink "$www_root/JBrowse/data/$pname", "$www_root/JBrowse/data/$projCode";
@@ -648,8 +656,9 @@ elsif( $action eq 'getreadsbyref'){
 	my $relative_mapping_outdir= "$proj_rel_dir/ReferenceBasedAnalysis/readsMappingToRef" ;
 	(my $out_fastq_name = $reference_id) =~ s/[ .']/_/g;
 	(my $correct_ref_id = $reference_id) =~ s/\W/\_/g;
-	$out_fastq_name = "$real_name"."_"."$out_fastq_name.mapped.fastq.zip";
-	my $cmd = "cd $mapping_outdir;$EDGE_HOME/scripts/bam_to_fastq.pl -mapped -id $correct_ref_id -prefix $reference_id.mapped $reference_file_prefix.sort.bam ; zip $out_fastq_name $reference_id.mapped.*fastq; rm $reference_id.mapped.*fastq ";
+	$out_fastq_name = "$real_name"."_"."$out_fastq_name.mapped";
+	my $out_fastq_zip_file = "$out_fastq_name.fastq.zip";
+	my $cmd = "cd $mapping_outdir;$EDGE_HOME/scripts/bam_to_fastq.pl -mapped -id $correct_ref_id -prefix $out_fastq_name $reference_file_prefix.sort.bam ; zip $out_fastq_zip_file $out_fastq_name.*fastq; rm $out_fastq_name.*fastq ";
 	$info->{STATUS} = "FAILURE";
 	$info->{INFO}   = "Failed to extract mapping to $reference_id reads fastq";
 
@@ -660,9 +669,9 @@ elsif( $action eq 'getreadsbyref'){
 	chdir $mapping_outdir;
 	$cmd = "bash $mapping_outdir/getseq.sh 2>\&1 1>>/dev/null &";
 	
-	if (  -s  "$mapping_outdir/$out_fastq_name"){
+	if (  -s  "$mapping_outdir/$out_fastq_zip_file"){
 		$info->{STATUS} = "SUCCESS";
-		$info->{PATH} = "$relative_mapping_outdir/$out_fastq_name";
+		$info->{PATH} = "$relative_mapping_outdir/$out_fastq_zip_file";
 	}elsif( ! -e "$mapping_outdir/$reference_file_prefix.sort.bam"){
                 $info->{INFO}   = "The result bam does not exist.";
                 $info->{INFO}   .= "If the project is older than $keep_days days, it has been deleted." if ($keep_days);
@@ -673,7 +682,7 @@ elsif( $action eq 'getreadsbyref'){
 		if( $pid ){
 			$info->{PID} = ++$pid;
 			$info->{STATUS} = "SUCCESS";
-			$info->{PATH} = "$relative_mapping_outdir/$out_fastq_name";
+			$info->{PATH} = "$relative_mapping_outdir/$out_fastq_zip_file";
 		}
 	}
 }
@@ -753,13 +762,18 @@ elsif( $action eq 'getreadsbytaxa'){
 		$pangia_db_path = dirname($config->{"Reads Taxonomy Classification"}->{"custom-pangia-db"}) if ($config->{"Reads Taxonomy Classification"}->{"custom-pangia-db"});
 		$cmd = "export HOME=$EDGE_HOME; $EDGE_HOME/thirdParty/pangia/pangia.py -t2 -dp $pangia_db_path -s $readstaxa_outdir/*.sam -m extract -x $taxa_for_contig_extract -c > $readstaxa_outdir/$out_fasta_name.fastq; cd $readstaxa_outdir; zip $out_fasta_name.fastq.zip $out_fasta_name.fastq; rm $out_fasta_name.fastq";
 	}
+	my $tax_result;
 	if( $cptool_for_reads_extract =~ /centrifuge/i ){
-                my $tax_result = "$readstaxa_outdir/${read_type}-$cptool_for_reads_extract.classification.csv";
-                $cmd = "awk '\$3==\"$taxa_for_contig_extract\" {print \$1}' $tax_result | $EDGE_HOME/scripts/get_seqs.pl - $reads_fastq > $readstaxa_outdir/$out_fasta_name.fastq; cd $readstaxa_outdir; zip $out_fasta_name.fastq.zip $out_fasta_name.fastq; rm $out_fasta_name.fastq" ;
+                $tax_result = "$readstaxa_outdir/${read_type}-$cptool_for_reads_extract.classification.csv";
+                $cmd = "awk '{print \$1\"\t\"\$3}' $tax_result | $EDGE_HOME/scripts/microbial_profiling/script/get_reads_by_taxa.pl - $reads_fastq $taxa_for_contig_extract > $readstaxa_outdir/$out_fasta_name.fastq; cd $readstaxa_outdir; zip $out_fasta_name.fastq.zip $out_fasta_name.fastq; rm $out_fasta_name.fastq" ;
         }
         if( $cptool_for_reads_extract =~ /kraken/i ){
-                my $tax_result = "$readstaxa_outdir/${read_type}-$cptool_for_reads_extract.classification.csv";
-                $cmd = "awk '\$3==\"$taxa_for_contig_extract\" {print \$2}' $tax_result | $EDGE_HOME/scripts/get_seqs.pl - $reads_fastq > $readstaxa_outdir/$out_fasta_name.fastq; cd $readstaxa_outdir; zip $out_fasta_name.fastq.zip $out_fasta_name.fastq; rm $out_fasta_name.fastq" ;
+                $tax_result = "$readstaxa_outdir/${read_type}-$cptool_for_reads_extract.classification.csv";
+                $cmd = "awk '{print \$2\"\t\"\$3}' $tax_result | $EDGE_HOME/scripts/microbial_profiling/script/get_reads_by_taxa.pl - $reads_fastq $taxa_for_contig_extract > $readstaxa_outdir/$out_fasta_name.fastq; cd $readstaxa_outdir; zip $out_fasta_name.fastq.zip $out_fasta_name.fastq; rm $out_fasta_name.fastq" ;
+        }
+        if( $cptool_for_reads_extract =~ /diamond/i ){
+                $tax_result = "$readstaxa_outdir/${read_type}-$cptool_for_reads_extract.raw.txt";
+		$cmd = "awk '{print \$1\"\t\"\$2}' $tax_result | $EDGE_HOME/scripts/microbial_profiling/script/get_reads_by_taxa.pl - $reads_fastq $taxa_for_contig_extract > $readstaxa_outdir/$out_fasta_name.fastq; cd $readstaxa_outdir; zip $out_fasta_name.fastq.zip $out_fasta_name.fastq; rm $out_fasta_name.fastq" ;
         }
 
 	# bring process to background and return to ajax
@@ -774,7 +788,7 @@ elsif( $action eq 'getreadsbytaxa'){
 	if (  -s  "$readstaxa_outdir/$out_fasta_name.fastq.zip"){
 		$info->{STATUS} = "SUCCESS";
 		$info->{PATH} = "$relative_taxa_outdir/$out_fasta_name.fastq.zip";
-	}elsif ( ! -e "$readstaxa_outdir/${read_type}-$cptool_for_reads_extract.bam" && ! glob("$readstaxa_outdir/*.sam") && ! glob("$readstaxa_outdir/*.classification.csv") ){
+	}elsif ( ! -e "$readstaxa_outdir/${read_type}-$cptool_for_reads_extract.bam" && ! glob("$readstaxa_outdir/*.sam") && ! -e "$tax_result" ){
 		$info->{INFO}   = "The result bam/csv does not exist.";
 		$info->{INFO}   .= "If the project is older than $keep_days days, it has been deleted." if ($keep_days);
 	}else
@@ -1040,7 +1054,19 @@ elsif($action eq 'define-gap-depth'){
 	my $sra_num=0;
 	foreach my $acc (@accs){
 		$acc =~ s/ //g;
-		my $url = "https://trace.ncbi.nlm.nih.gov/Traces/sra/sra.cgi?save=efetch&db=sra&rettype=runinfo&term=$acc";
+		my $url0 = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=sra&term=$acc&usehistory=y";
+		my $cmd0 = ($sys->{'download_interface'} =~ /curl/i)?"curl -A \"Mozilla/5.0\" -L $proxy \"$url0\" 2>/dev/null":"wget -v -U \"Mozilla/5.0\" -O - \"$url0\" 2>/dev/null";
+		my $webenv;
+		my $key;
+		my $SRA_fh0;
+		my $pid = open ($SRA_fh0, "-|")
+			or exec($cmd0);
+		while(my $line=<$SRA_fh0>){
+			$webenv = $1 if ( $line =~ /<WebEnv>(\S+)<\/WebEnv>/);
+			$key = $1 if ($line =~ /<QueryKey>(\S+)<\/QueryKey>/);
+		}
+		my $url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=sra&rettype=runinfo&query_key=$key&WebEnv=$webenv&retmode=text";
+
 		my $cmd = ($sys->{'download_interface'} =~ /curl/i)?"curl -A \"Mozilla/5.0\" -L $proxy \"$url\" 2>/dev/null":"wget -v -U \"Mozilla/5.0\" -O - \"$url\" 2>/dev/null";
 		my $SRA_fh;
 		my $pid = open ($SRA_fh, "-|")
@@ -1075,7 +1101,7 @@ elsif($action eq 'define-gap-depth'){
  		}
 		if (!$line_num){
 			$info->{STATUS} = "FAILURE";
-			$info->{INFO}   = "Failed to found $acc from NCBI-SRA.";
+			$info->{INFO}   = "Failed to find $acc in NCBI-SRA.";
 			&returnStatus();
 		}
 	}

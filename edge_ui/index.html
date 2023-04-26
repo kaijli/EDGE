@@ -184,6 +184,18 @@
 		<div class="ui-grid-b ui-responsive app-showcase">
 			<div class="ui-block-a">
 				<div class="app-artwork">
+					<img alt="COVID19" src="images/EDGE-COVID19.png" >
+				</div>
+				<div data="edgeCOVID19" class="app-info">
+					<div class="app-name-version">
+						<div class="app-version"></div>
+						<div class="app-name">COVID-19 Genome Analytics</div>
+					</div>
+					<div class="app-summary">A platform for COVID-19 analytics</div>
+				</div>
+			</div>
+			<div class="ui-block-b">
+				<div class="app-artwork">
 					<img alt="New to EDGE" src="images/NewToEDGE.png" >
 				</div>
 				<div data="newToEDGE" class="app-info">
@@ -193,7 +205,7 @@
 					</div>
 				</div>
 			</div>
-			<div class="ui-block-b">
+			<div class="ui-block-c">
 				<div class="app-artwork">
 					<img alt="edge main workflow" src="images/edge_logo_app.png">
 				</div>
@@ -205,7 +217,9 @@
 					<div class="app-summary">EDGE bioinformatics</div>
 				</div>
 			</div>
-			<div class="ui-block-c">
+		</div>
+		<div class="ui-grid-b ui-responsive app-showcase">
+			<div class="ui-block-a">
 				<div class="app-artwork">
 					<img alt="edge qiime workflow" src="images/Qiime.png">
 				</div>
@@ -215,20 +229,6 @@
 						<div class="app-name">Run QIIME2</div>
 					</div>
 					<div class="app-summary">Amplicon Data Analysis, 16s, 18s, and Fungal ITS</div>
-				</div>
-			</div>
-		</div>
-		<div class="ui-grid-b ui-responsive app-showcase">
-			<div class="ui-block-a">
-				<div class="app-artwork">
-					<img alt="edge qiime workflow" src="images/deteqt.png">
-				</div>
-				<div data="runDETEQT" class="app-info">
-					<div class="app-name-version">
-						<div class="app-version">0.3.0</div>
-						<div class="app-name">Run DETEQT</div>
-					</div>
-					<div class="app-summary">Diagnostic targeted sequencing adjudication pipeline</div>
 				</div>
 			</div>
 			<div class="ui-block-b">
@@ -383,7 +383,7 @@ A complete version of EDGE is available as a variety of packages that can fit in
 			<ul>
 			<li>EDGE Bioinformatics is built around a collection of publicly available, open-source software packaged or in-house developed tools/algorithms/scripts to process <b>FASTQ data</b> or <b>Contig FASTA data</b> (there is currently limited capability of incorporating PacBio and Oxford Nanopore data into the Assembly module)</li>
 			<li>The EDGE bioinformatics web-based graphic user interface is primarily implemented using the JQuery Mobile javascript framework and HTML5 on the client-side, and implements perl CGI using Apache or Python on the server-side</li>
-			<li>The current version of EDGE pipeline has been extensively tested on Linux platforms with Ubuntu 14.04 and CentOS 6/7 operation system and will only work on 64bit Linux environments</li>
+			<li>The current version of EDGE pipeline has been extensively tested on Linux platforms with Ubuntu 18.04 and CentOS 7 operation system and will only work on 64bit Linux environments</li>
 			<li>Due to the involvement of several memory/time consuming steps, we normally recommend computers with at least 24GB memory and 8 CPUs, though we typically use on servers with a minimum of 256GB memory with 64 CPUs</li>
 			</ul>
 		</p>
@@ -575,7 +575,7 @@ A complete version of EDGE is available as a variety of packages that can fit in
 				<p class="edge_tool_note">Run EDGE with Multiple projects using a tools set configuration. Click <a href="data/BatchExcelExample.xlsx" download="" target="_blank"> Download [Sample File]</a> to see the example. </p>
 				<div id="edge-batch-input-block1" class="edge-batch-input"> 
 					<div class="ui-field-contain input-type-file">
-						<label for="edge-batch-input-excel-1">Batch Excel File<a href="#" class="tooltip ui-btn ui-nodisc-icon ui-corner-all ui-btn-inline ui-icon-info ui-btn-icon-notext my-tooltip-btn" title='Column headers must be labeled: "Project", "Q1", "Q2", "S", "SAR", "Description"' for="edge-batch-input-block1"></a></label>
+						<label for="edge-batch-input-excel-1">Batch Excel File<a href="#" class="tooltip ui-btn ui-nodisc-icon ui-corner-all ui-btn-inline ui-icon-info ui-btn-icon-notext my-tooltip-btn" title='Column headers must be labeled: "Project", "Q1", "Q2", "S", "SRA", "Description"' for="edge-batch-input-block1"></a></label>
 						<input type="text" data-mini="true" name="edge-batch-input-excel" id="edge-batch-input-excel-1" placeholder="absolute file path/select file">
 						<div class="edge-file-selector"><a href='#edge_file_dialog' aria-haspopup='true' data-rel='popup' data-position-to='window' data-transition='pop' data-mini="true" class="ui-btn ui-shadow ui-corner-all ui-icon-bullets ui-btn-icon-notext">file</a></div>
 					</div>
@@ -885,7 +885,7 @@ A complete version of EDGE is available as a variety of packages that can fit in
 				<input type="number" name="edge-qc-q" id="edge-qc-q" data-mini="true" data-clear-btn="true" value="20">
 			</div>
 			<div class="ui-field-contain">
-				<label for="edge-qc-avgq">Average Quality Cutoff</label>
+				<label for="edge-qc-avgq">Average Quality Cutoff<a href="#" class="tooltip ui-btn  ui-corner-all ui-nodisc-icon ui-btn-inline ui-icon-info ui-btn-icon-notext my-tooltip-btn" title="get rid of the read when the average quality of the whole sequence read is less than this value"></a></label>
 				<input type="number" name="edge-qc-avgq" id="edge-qc-avgq" data-mini="true" data-clear-btn="true" value="0">
 			</div>
 			<div class="ui-field-contain">
@@ -1090,11 +1090,11 @@ A complete version of EDGE is available as a variety of packages that can fit in
 				<div class="ui-field-contain">
 				<fieldset data-role="controlgroup" data-mini="true" data-type="horizontal">
 					<legend>Algorithm<a href="#" class="tooltip ui-btn ui-nodisc-icon ui-corner-all ui-btn-inline ui-icon-info ui-btn-icon-notext my-tooltip-btn" id="edge-lrasm-algorithm-tooltip"></a></legend>
-					<input type="radio" name="edge-lrasm-algorithm" id="edge-lrasm-algorithm1" value="miniasm" checked="checked">
+					<input type="radio" name="edge-lrasm-algorithm" id="edge-lrasm-algorithm1" value="miniasm">
 					<label for="edge-lrasm-algorithm1">miniasm</label>
 					<input type="radio" name="edge-lrasm-algorithm" id="edge-lrasm-algorithm2" value="wtdbg2">
 					<label for="edge-lrasm-algorithm2">wtdbg2</label>
-					<input type="radio" name="edge-lrasm-algorithm" id="edge-lrasm-algorithm3" value="flye">
+					<input type="radio" name="edge-lrasm-algorithm" id="edge-lrasm-algorithm3" value="flye" checked="checked">
 					<label for="edge-lrasm-algorithm3">flye</label>
 					<input type="radio" name="edge-lrasm-algorithm" id="edge-lrasm-algorithm4" value="metaflye">
 					<label for="edge-lrasm-algorithm4">metaFlye</label>
@@ -1130,13 +1130,18 @@ A complete version of EDGE is available as a variety of packages that can fit in
 			<div id="edge-spades-parameters">
 				<p class="edge_tool_note"><a href="https://github.com/ablab/spades" target="_blank">SPAdes</a> performs well on isolates as well as single cell data but it may not work on larger genomes, and it takes more computational resource. PacBio CLR and Oxford Nanopore reads are used for gap closure and repeat resolution.</p>
 				<div class="ui-field-contain">
-					<label for="edge-spades-algorithm">Algorithm</label>
+					<label for="edge-spades-algorithm">Algorithm<a href="#" class="tooltip ui-btn ui-corner-all ui-nodisc-icon ui-btn-inline ui-icon-info ui-btn-icon-notext my-tooltip-btn" id="edge-spades-algorithm-l"></a></label>
 					<select id="edge-spades-algorithm" data-mini="true" name="edge-spades-algorithm" data-native-menu="false">
 						<option value="default">Default</option>
 						<option value="singlecell">Single-cell (MDA)</option>
 						<option value="metagenome">Metagenome (metaSPAdes)</option>
 						<option value="plasmid">Plasmids (plasmidSPAdes)</option>
-						<option value="rna">RNA (rnaSPAdes)</option>
+						<option value="rna">RNAseq (rnaSPAdes)</option>
+						<option value="bio">Biosynthetic (biosyntheticSPAdes)</option>
+						<option value="corona">Corona (coronaSPAdes)</option>
+						<option value="metaviral">Metaviral (metaviralSPAdes)</option>
+						<option value="metaplasmid">Metaplasmid (metaplasmidSPAdes)</option>
+						<option value="rnaviral">RNA viral (rnaviralSPAdes)</option>
 					</select>
 				</div>
 				<div class="ui-field-contain input-type-file">
@@ -1227,6 +1232,10 @@ A complete version of EDGE is available as a variety of packages that can fit in
 				<label for="edge-anno-kingdom5">Metagenome</label>
 			</fieldset>
 			</div>
+			<div class="ui-field-contain">
+                                <label for="edge-anno-gcode">Genetic Code<a href="#" id="edge-anno-gcode-tooltip" class="tooltip ui-btn  ui-corner-all ui-nodisc-icon ui-btn-inline ui-icon-info ui-btn-icon-notext my-tooltip-btn" title="" ></a></label>
+                                <input type="number" name="edge-anno-gcode" id="edge-anno-gcode" data-mini="true" data-clear-btn="true" value="11" max="33" min="1">
+                        </div>
 			<div id="edge-anno-kegg" class="ui-field-contain">
 				<fieldset data-role="controlgroup" data-mini="true" data-type="horizontal">
 					<legend>KEGG Pathway View<a href="#" class="tooltip ui-btn  ui-corner-all ui-nodisc-icon ui-btn-inline ui-icon-info ui-btn-icon-notext my-tooltip-btn" title="Visualize Prokka annotation in KEGG map. Need Internet Connection"></a></legend>
@@ -1289,13 +1298,22 @@ A complete version of EDGE is available as a variety of packages that can fit in
 				</div>
 				</div>
 				<div class="ui-block-a">
-				<div class="ui-field-contain">
+				<!--<div class="ui-field-contain">
 					<fieldset data-role="controlgroup" data-mini="true" data-type="horizontal">
 						<legend>smCoG analysis<a href="#" class="tooltip ui-btn  ui-corner-all ui-nodisc-icon ui-btn-inline ui-icon-info ui-btn-icon-notext my-tooltip-btn" title="Look for sec. met. clusters of orthologous groups."></a></legend>
 						<input type="radio" data-mini="true" name="antismash-smcogs" id="edge-sma-smcogs-sw1" value="1" checked="checked">
 						<label for="edge-sma-smcogs-sw1">On</label>
 						<input type="radio" data-mini="true" name="antismash-smcogs" id="edge-sma-smcogs-sw2" value="0">
 						<label for="edge-sma-smcogs-sw2">Off</label>
+					</fieldset>
+				</div>-->
+				<div class="ui-field-contain">
+					<fieldset data-role="controlgroup" data-mini="true" data-type="horizontal">
+						<legend>MIBiG cluster comparison<a href="#" class="tooltip ui-btn  ui-corner-all ui-nodisc-icon ui-btn-inline ui-icon-info ui-btn-icon-notext my-tooltip-btn" title="Run a comparison against the MIBiG dataset."></a></legend>
+						<input type="radio" data-mini="true" name="antismash-mibig" id="edge-sma-mibig-sw1" value="1">
+						<label for="edge-sma-mibig-sw1">On</label>
+						<input type="radio" data-mini="true" name="antismash-mibig" id="edge-sma-mibig-sw2" value="0" checked="checked">
+						<label for="edge-sma-mibig-sw2">Off</label>
 					</fieldset>
 				</div>
 				</div>
@@ -1324,7 +1342,7 @@ A complete version of EDGE is available as a variety of packages that can fit in
 				<div class="ui-block-b">
 				<div class="ui-field-contain">
 					<fieldset data-role="controlgroup" data-mini="true" data-type="horizontal">
-						<legend>Whole-genome PFAM analysis<a href="#" class="tooltip ui-btn  ui-corner-all ui-nodisc-icon ui-btn-inline ui-icon-info ui-btn-icon-notext my-tooltip-btn" title="Run a whole-genome HMMer analysis."></a></legend>
+						<legend>Cluster Pfam analysis<a href="#" class="tooltip ui-btn  ui-corner-all ui-nodisc-icon ui-btn-inline ui-icon-info ui-btn-icon-notext my-tooltip-btn" title="Run a whole-genome HMMer analysis."></a></legend>
 						<input type="radio" data-mini="true" name="antismash-fullhmm" id="edge-sma-wgpa-sw1" value="1">
 						<label for="edge-sma-wgpa-sw1">On</label>
 						<input type="radio" data-mini="true" name="antismash-fullhmm" id="edge-sma-wgpa-sw2" value="0" checked="checked">
@@ -1332,17 +1350,39 @@ A complete version of EDGE is available as a variety of packages that can fit in
 					</fieldset>
 				</div>
 				</div>
-				<div class="ui-block-a antismash-bacteria-only-option">
+				<div class="ui-block-a">
 				<div class="ui-field-contain">
 					<fieldset data-role="controlgroup" data-mini="true" data-type="horizontal">
-						<legend>Detect TTA codons<a href="#" class="tooltip ui-btn  ui-corner-all ui-nodisc-icon ui-btn-inline ui-icon-info ui-btn-icon-notext my-tooltip-btn" title="Run TTA codon detection module."></a></legend>
-						<input type="radio" data-mini="true" name="antismash-tta" id="edge-sma-tta-sw1" value="1">
-						<label for="edge-sma-tta-sw1">On</label>
-						<input type="radio" data-mini="true" name="antismash-tta" id="edge-sma-tta-sw2" value="0" checked="checked">
-						<label for="edge-sma-tta-sw2">Off</label>
+						<legend>RREFinder<a href="#" class="tooltip ui-btn  ui-corner-all ui-nodisc-icon ui-btn-inline ui-icon-info ui-btn-icon-notext my-tooltip-btn" title="Run RREFinder precision mode on all RiPP gene clusters."></a></legend>
+						<input type="radio" data-mini="true" name="antismash-tta" id="edge-sma-rre-sw1" value="1" checked="checked">
+						<label for="edge-sma-rre-sw1">On</label>
+						<input type="radio" data-mini="true" name="antismash-tta" id="edge-sma-rre-sw2" value="0">
+						<label for="edge-sma-rre-sw2">Off</label>
 					</fieldset>
 				</div>
 				</div>
+				<div class="ui-block-b">
+				<div class="ui-field-contain">
+					<fieldset data-role="controlgroup" data-mini="true" data-type="horizontal">
+						<legend>Pfam-based GO term annotation<a href="#" class="tooltip ui-btn  ui-corner-all ui-nodisc-icon ui-btn-inline ui-icon-info ui-btn-icon-notext my-tooltip-btn" title="Run Pfam to Gene Ontology mapping module."></a></legend>
+						<input type="radio" data-mini="true" name="antismash-pfam2go" id="edge-sma-pfam2go-sw1" value="1">
+						<label for="edge-sma-pfam2go-sw1">On</label>
+						<input type="radio" data-mini="true" name="antismash-pfam2go" id="edge-sma-pfam2go-sw2" value="0" checked="checked">
+						<label for="edge-sma-pfam2go-sw2">Off</label>
+					</fieldset>
+				</div>
+				</div>
+				<!--<div class="ui-block-a antismash-bacteria-only-option">
+				<div class="ui-field-contain">
+					<fieldset data-role="controlgroup" data-mini="true" data-type="horizontal">
+						<legend>TFBS analysis<a href="#" class="tooltip ui-btn  ui-corner-all ui-nodisc-icon ui-btn-inline ui-icon-info ui-btn-icon-notext my-tooltip-btn" title="Run TFBS detection module."></a></legend>
+						<input type="radio" data-mini="true" name="antismash-tfbs" id="edge-sma-tfbs-sw1" value="1" checked="checked">
+						<label for="edge-sma-tfbs-sw1">On</label>
+						<input type="radio" data-mini="true" name="antismash-tfbs" id="edge-sma-tfbs-sw2" value="0">
+						<label for="edge-sma-tfbs-sw2">Off</label>
+					</fieldset>
+				</div>
+				</div>-->
 				<div class="ui-block-a antismash-fungi-only-option">
 				<div class="ui-field-contain">
 					<fieldset data-role="controlgroup" data-mini="true" data-type="horizontal">
@@ -1354,14 +1394,31 @@ A complete version of EDGE is available as a variety of packages that can fit in
 					</fieldset>
 				</div>
 				</div>
+				<div class="ui-block-b">
+				<div class="ui-field-contain">
+					<fieldset data-role="controlgroup" data-mini="true" data-type="horizontal">
+						<legend>TIGRFam analysis<a href="#" class="tooltip ui-btn  ui-corner-all ui-nodisc-icon ui-btn-inline ui-icon-info ui-btn-icon-notext my-tooltip-btn" title="Annotate clusters using TIGRFam profiles."></a></legend>
+						<input type="radio" data-mini="true" name="antismash-tigrfam" id="edge-sma-tigrfam-sw1" value="1">
+						<label for="edge-sma-tigrfam-sw1">On</label>
+						<input type="radio" data-mini="true" name="antismash-tigrfam" id="edge-sma-tigrfam-sw2" value="0" checked="checked">
+						<label for="edge-sma-tigrfam-sw2">Off</label>
+					</fieldset>
+				</div>
+				</div>
 			</div>
 			<div class="edge-right">|<a href="#" id="edge-anno-toggle" class="edge-additional-options-toggle" > additional options </a>|</div>
 			<div id="edge-anno-options" class="edge-additional-options">
+				<div class="ui-field-contain input-type-file">
+					<label for="edge-anno-protein-file">Protein FASTA/GenBank for Prokka<a href="#" class="tooltip ui-btn  ui-corner-all ui-nodisc-icon ui-btn-inline ui-icon-info ui-btn-icon-notext my-tooltip-btn" title="Protein FASTA or GBK file to use as 1st priority annoation source"></a></label>
+					<input type="text" data-mini="true" name="edge-anno-protein-file" id="edge-anno-protein-file" placeholder="absolute file path/select file">
+					<div class="edge-file-selector"><a href='#edge_file_dialog' aria-haspopup='true' data-rel='popup' data-position-to='window' data-transition='pop' data-mini="true" class="ui-btn ui-shadow ui-corner-all ui-icon-bullets ui-btn-icon-notext">file</a></div>
+				</div>
 				<div class="ui-field-contain input-type-file">
 					<label for="edge-anno-hmm-file">Trusted HMM for Prokka<a href="#" class="tooltip ui-btn  ui-corner-all ui-nodisc-icon ui-btn-inline ui-icon-info ui-btn-icon-notext my-tooltip-btn" title="Trusted HMM to first annotate from"></a></label>
 					<input type="text" data-mini="true" name="edge-anno-hmm-file" id="edge-anno-hmm-file" placeholder="absolute file path/select file">
 					<div class="edge-file-selector"><a href='#edge_file_dialog' aria-haspopup='true' data-rel='popup' data-position-to='window' data-transition='pop' data-mini="true" class="ui-btn ui-shadow ui-corner-all ui-icon-bullets ui-btn-icon-notext">file</a></div>
 				</div>
+				<div class="ui-field-contain"><label for="edge-anno-evalue">Similarity e-value cut-off for Prokka</label><input type="text" data-mini="true" data-clear-btn="true" name="edge-anno-evalue" id="edge-anno-evalue" value="1e-09"></div>
 			</div>
 			</div> <!-- edge-annotation-parameters -->
 			<div id="edge-binning-parameters">
@@ -1492,9 +1549,9 @@ A complete version of EDGE is available as a variety of packages that can fit in
 					<div class="ui-field-contain">
 						<fieldset data-role="controlgroup" data-mini="true" data-type="horizontal">
 							<legend>Disable BAQ<a href="#" class="tooltip ui-btn  ui-corner-all ui-nodisc-icon ui-btn-inline ui-icon-info ui-btn-icon-notext my-tooltip-btn" title="disable BAQ (per-Base Alignment Quality)" ></a></legend>
-							<input type="radio" data-mini="true" name="edge-r2g-con-disableBAQ" id="edge-r2g-con-disableBAQ-sw1" value="1">
+							<input type="radio" data-mini="true" name="edge-r2g-con-disableBAQ" id="edge-r2g-con-disableBAQ-sw1" value="1" checked="checked">
 							<label for="edge-r2g-con-disableBAQ-sw1">Yes</label>
-							<input type="radio" data-mini="true" name="edge-r2g-con-disableBAQ" id="edge-r2g-con-disableBAQ-sw2" value="0" checked="checked">
+							<input type="radio" data-mini="true" name="edge-r2g-con-disableBAQ" id="edge-r2g-con-disableBAQ-sw2" value="0">
 							<label for="edge-r2g-con-disableBAQ-sw2">No</label>
 						 </fieldset>
 					</div>
@@ -1508,10 +1565,32 @@ A complete version of EDGE is available as a variety of packages that can fit in
 
 						</fieldset>
 					</div>
+					<div class="ui-field-contain">
+						<fieldset data-role="controlgroup" data-mini="true" data-type="horizontal">
+							<legend>Homopolymer Filter<a href="#" class="tooltip ui-btn  ui-corner-all ui-nodisc-icon ui-btn-inline ui-icon-info ui-btn-icon-notext my-tooltip-btn" title="filter the INDELs variants < 0.8 INDEL Threshold in homopolymer (>= 4bp) region" ></a></legend>
+							<input type="radio" data-mini="true" name="edge-r2g-con-homopolymer-filter" id="edge-r2g-con-homopolymer-filter-sw1" value="1">
+							<label for="edge-r2g-con-homopolymer-filter-sw1">Yes</label>
+							<input type="radio" data-mini="true" name="edge-r2g-con-homopolymer-filter" id="edge-r2g-con-homopolymer-filter-sw2" value="0" checked='checked'>
+							<label for="edge-r2g-con-homopolymer-filter-sw2">No</label>
+						</fieldset>
+					</div>
+					<div class="ui-field-contain">
+						<fieldset data-role="controlgroup" data-mini="true" data-type="horizontal">
+							<legend>StrandBias Filter<a href="#" class="tooltip ui-btn  ui-corner-all ui-nodisc-icon ui-btn-inline ui-icon-info ui-btn-icon-notext my-tooltip-btn" title="filter the SNP variants based on both Fisher Exact test Phred scaled p value score (>60) and the symmetric odds ratio test score (>3)" ></a></legend>
+							<input type="radio" data-mini="true" name="edge-r2g-con-strandbiase-filter" id="edge-r2g-con-strandbiase-filter-sw1" value="1">
+							<label for="edge-r2g-con-strandbiase-filter-sw1">Yes</label>
+							<input type="radio" data-mini="true" name="edge-r2g-con-strandbiase-filter" id="edge-r2g-con-strandbiase-filter-sw2" value="0" checked='checked'>
+							<label for="edge-r2g-con-strandbiase-filter-sw2">No</label>
+						</fieldset>
+					</div>
 				</div>
 				<div class="ui-field-contain edge-fastq-options">
 					<label for="edge-r2g-aligner-options">Aligner Options<a href="#" class="tooltip ui-btn ui-corner-all ui-nodisc-icon ui-btn-inline ui-icon-info ui-btn-icon-notext my-tooltip-btn edge-aligner-options"></a></label>
 					<input type="text" data-mini="true" data-clear-btn="false" name="edge-r2g-aligner-options" id="edge-r2g-aligner-options" placeholder="(optional)">
+				</div>
+				 <div class="ui-field-contain edge-fastq-options">
+					<label for="edge-r2g-min-mapQ">Map Quality<a href="#" class="tooltip ui-btn  ui-corner-all ui-nodisc-icon ui-btn-inline ui-icon-info ui-btn-icon-notext my-tooltip-btn" title="For coverage calculation and variants call, BWA MEM/minimap2 uses MAPQ=60 for uniquely mapped and bowtie2 uses MAPQ=42." ></a></label>
+					<input type="number" name="edge-r2g-min-mapQ" id="edge-r2g-min-mapQ" data-mini="true" data-clear-btn="true" value="42">
 				</div>
 				<div class="ui-field-contain edge-fastq-options">
  					<label for="edge-r2g-max-clip">MaxClip<a href="#" class="tooltip ui-btn  ui-corner-all ui-nodisc-icon ui-btn-inline ui-icon-info ui-btn-icon-notext my-tooltip-btn" title="Use samclip to filter alignment result. Maximum clip length to allow." ></a></label>
@@ -1556,11 +1635,15 @@ A complete version of EDGE is available as a variety of packages that can fit in
 					</fieldset>
 				</div>
 				<div class="ui-field-contain edge-fastq-options">
+					<label for="edge-r2g-variantcall-min-qual">Variant QUAL<a href="#" class="tooltip ui-btn  ui-corner-all ui-nodisc-icon ui-btn-inline ui-icon-info ui-btn-icon-notext my-tooltip-btn" title="Minimum QUAL SCORE, QUAL phred-scaled quality score for the assertion made in ALT, to filter varaint call result." ></a></label>
+					<input type="number" name="edge-r2g-variantcall-min-qual" id="edge-r2g-variantcall-min-qual" data-mini="true" data-clear-btn="true" value="60">
+				</div>
+				<div class="ui-field-contain edge-fastq-options">
 					<fieldset data-role="controlgroup" data-mini="true" data-type="horizontal">
 						<legend>Ploidy<a href="#" class="tooltip ui-btn  ui-corner-all ui-nodisc-icon ui-btn-inline ui-icon-info ui-btn-icon-notext my-tooltip-btn" title="Ploidy for variants call" ></a></legend>
-						<input type="radio" name="edge-r2g-variantcall-ploidy" id="edge-r2g-variantcall-ploidy1" value="haploid" checked="checked">
+						<input type="radio" name="edge-r2g-variantcall-ploidy" id="edge-r2g-variantcall-ploidy1" value="haploid">
 						<label for="edge-r2g-variantcall-ploidy1">Haploid</label>
-						<input type="radio" name="edge-r2g-variantcall-ploidy" id="edge-r2g-variantcall-ploidy2" value="diploid">
+						<input type="radio" name="edge-r2g-variantcall-ploidy" id="edge-r2g-variantcall-ploidy2" value="diploid" checked="checked">
 						<label for="edge-r2g-variantcall-ploidy2">Diploid</label>
 					</fieldset>
 				</div>
@@ -1901,6 +1984,16 @@ A complete version of EDGE is available as a variety of packages that can fit in
 			</div>
 			</div> <!-- edge-primer-design-parameters -->
 		</div>
+		<div id="edge-runEDGE-jbrowse" data-role="collapsible" data-collapsed-icon="carat-d" data-expanded-icon="carat-u">
+			<h4>
+				<div class="ui-field-contain edge-collapsible-options">
+					<select id="edge-jbrowse-sw" name="edge-jbrowse-sw" data-role="slider" data-mini="true">
+						<option value="0">Off</option><option value="1" selected="True">On</option>
+					</select>
+					<label for="edge-jbrowse-sw">JBrowse</label>
+				</div>
+			</h4>
+                </div>
 		</div> <!--Choose Proceses collapsible for edge-main-pipeline-input"-->
 		<div class="edge-qiime-pipeline-input">
 			<div data-role="collapsible" data-collapsed-icon="carat-d" data-expanded-icon="carat-u" data-collapsed="false">
@@ -2233,6 +2326,7 @@ A complete version of EDGE is available as a variety of packages that can fit in
 		<div class="sign-option-block">
 			<p>Forgot your password?<a href="#begin-password-reset" id="resetPasswd-link"> Reset it here!</a></p>
 			<p>New to EDGE? <a href="#signUpForm" id="signUpBtn" data-rel="popup" data-position-to="window">Sign up now!</a></p>
+			<p>Contiue as GUEST: <a href="#" id="signIn-guest">GO!</a></p>
 		</div>
 		<div data-role="popup" data-history="false" id="begin-password-reset" data-overlay-theme="b">
 			<a href="#" class="ui-btn ui-corner-all ui-shadow ui-btn-a ui-icon-delete ui-btn-icon-notext ui-btn-right edge-popup-close">Close</a>
@@ -2462,12 +2556,14 @@ A complete version of EDGE is available as a variety of packages that can fit in
 		</p>	
 		<a id="scroll-up-btn" href="#" class="ui-btn ui-icon-carat-u ui-btn-icon-notext ui-corner-all">No text</a>
 		<div class="edge-footer-logo-left">
-            		<a target="_new" href="http://www.lanl.gov"><img src="images/logo_LANL.png"/></a>
+            		<a target="_new" href="https://www.lanl.gov"><img src="images/logo_LANL.png"/></a>
 		</div>
 		<div class="edge-footer-logo">
-			<a target="_new" href="http://www.dtra.mil"><img src="images/logo_DTRA.png"/></a>
-			<a target="_new" href="http://www.energy.gov"><img src="images/logo_DOE.png"/></a>
-			<a target="_new" href="http://nnsa.energy.gov/"><img src="images/logo_NNSA.png"/></a></div>
+			<a target="_new" href="https://www.dtra.mil"><img src="images/logo_DTRA.png"/></a>
+			<a target="_new" href="https://www.energy.gov"><img src="images/logo_DOE.png"/></a>
+			<a target="_new" href="https://nnsa.energy.gov/"><img src="images/logo_NNSA.png"/></a>
+			<a target="_new" href="https://access-ci.org/"><img src="images/logo_access.png"/></a>
+		</div>
 	</div><!-- /footer -->
 </div><!-- /page -->
 

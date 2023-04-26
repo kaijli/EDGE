@@ -333,7 +333,7 @@ foreach my $idx ( sort {$a<=>$b} keys %$file_info ){
 	chomp $pwd;
 
 	print $post_fh "
-      export PATH=$Bin:$Bin/../:$Bin/script/:$Bin/bin/:$ENV{EDGE_HOME}/thirdParty/Anaconda2/bin:\$PATH;
+      export PATH=$Bin:$Bin/../:$Bin/script/:$Bin/bin/:$ENV{EDGE_HOME}/thirdParty/Mambaforge/bin:\$PATH;
 	  cd $pwd;
 
       echo \"[Post-processing #$idx $fnb]\";
@@ -376,6 +376,10 @@ foreach my $idx ( sort {$a<=>$b} keys %$file_info ){
           then
             cp -rf $outdir/* $tool_rep_dir/;
 	  fi
+          if [ -e \"$outdir/$prefix.diamondRawOutput.txt\" ]
+          then
+            cp -f $outdir/$prefix.diamondRawOutput.txt $tool_rep_dir/$fnb-$tool.raw.txt
+          fi
           if ls $outdir/$prefix.gottcha_*.sam 1>/dev/null 2>&1
           then 
             cp -f $outdir/$prefix.gottcha_*.sam $tool_rep_dir/;

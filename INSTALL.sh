@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -e
+ulimit -n 4096
 rootdir=$( cd $(dirname $0) ; pwd -P )
 exec >  >(tee install.log)
 exec 2>&1
@@ -9,14 +10,13 @@ cd thirdParty
 
 mkdir -p $rootdir/bin
 
-export PATH=$PATH:$rootdir/bin/:$rootdir/thirdParty/Anaconda2/bin
-export CPLUS_INCLUDE_PATH=$rootdir/thirdParty/Anaconda2/include/:$CPLUS_INCLUDE_PATH
+export PATH=$rootdir/bin/:$PATH:$rootdir/thirdParty/Mambaforge/bin
+export CPLUS_INCLUDE_PATH=$rootdir/thirdParty/Mambaforge/include/:$CPLUS_INCLUDE_PATH
 
 if [ ! -d $HOME ]; then export HOME=$rootdir; fi	
 
 gcc_version=$(gcc -dumpversion)
-anaconda3bin=$rootdir/thirdParty/Anaconda3/bin
-anaconda2bin=$rootdir/thirdParty/Anaconda2/bin
+mambaforgebin=$rootdir/thirdParty/Mambaforge/bin
 
 
 assembly_tools=( idba spades megahit lrasm racon unicycler )
@@ -26,7 +26,7 @@ alignments_tools=( hmmer infernal bowtie2 bwa mummer diamond minimap2 rapsearch2
 taxonomy_tools=( kraken2 metaphlan2 kronatools gottcha gottcha2 centrifuge miccr pangia )
 phylogeny_tools=( FastTree RAxML )
 perl_modules=( perl_parallel_forkmanager perl_excel_writer perl_archive_zip perl_string_approx perl_pdf_api2 perl_html_template perl_html_parser perl_JSON perl_bio_phylo perl_xml_twig perl_cgi_session perl_email_valid perl_mailtools )
-python_packages=( Anaconda2 Anaconda3 )
+python_packages=( Mambaforge )
 metagenome_tools=( MaxBin checkM )
 pipeline_tools=( DETEQT reference-based_assembly PyPiReT qiime2 )
 all_tools=( "${pipeline_tools[@]}" "${python_packages[@]}" "${assembly_tools[@]}" "${annotation_tools[@]}" "${utility_tools[@]}" "${alignments_tools[@]}" "${taxonomy_tools[@]}" "${phylogeny_tools[@]}" "${metagenome_tools[@]}" "${perl_modules[@]}")
@@ -41,13 +41,13 @@ echo "--------------------------------------------------------------------------
 tar xzf FragGeneScan1.31.tar.gz 
 cd FragGeneScan1.31
 make clean
-make fgs
+make fgs >/dev/null || make fgs
 cd $rootdir/thirdParty
 
 tar xzf MaxBin-$VER.tar.gz 
 cd MaxBin-$VER
 cd src
-make
+make >/dev/null || make
 cd ..
 cat << _EOM > setting
 [FragGeneScan] $rootdir/thirdParty/FragGeneScan1.31
@@ -89,7 +89,7 @@ echo "--------------------------------------------------------------------------
 ------------------------------------------------------------------------------
 "
 Org_PATH=$PATH;
-export PATH=$rootdir/thirdParty/Anaconda3/bin:$rootdir/bin:$PATH;
+export PATH=$rootdir/thirdParty/Mambaforge/bin:$rootdir/bin:$PATH;
 tar xvzf reference-based_assembly.tgz
 cd reference-based_assembly
 ./INSTALL.sh
@@ -111,7 +111,7 @@ echo "--------------------------------------------------------------------------
 "
 tar xvzf FaQCs-$VER.tar.gz
 cd FaQCs
-make
+make >/dev/null || make
 cp -f FaQCs $rootdir/bin/.
 cd $rootdir/thirdParty
 echo "
@@ -139,15 +139,18 @@ echo "
 }
 
 install_DETEQT(){
-local VER=0.3.1
+local VER=0.3.2
 echo "------------------------------------------------------------------------------
                            Installing DETEQT $VER
 ------------------------------------------------------------------------------
 "
+Org_PATH=$PATH;
+export PATH=$rootdir/thirdParty/Mambaforge/bin:$rootdir/bin:$PATH;
 tar xvzf DETEQT-$VER.tgz
 cd DETEQT
 ./INSTALL.sh
 ln -sf $rootdir/thirdParty/DETEQT $rootdir/bin/DETEQT
+export PATH=$Org_PATH
 cd $rootdir/thirdParty
 echo "
 ------------------------------------------------------------------------------
@@ -165,13 +168,13 @@ echo "--------------------------------------------------------------------------
 tar xvzf PyPiReT-$VER.tgz
 cd PyPiReT
 Org_PATH=$PATH;
-export PATH=$rootdir/thirdParty/Anaconda3/bin:$rootdir/bin:$PATH;
-if [ -e $rootdir/thirdParty/Anaconda3/envs/piret ]
+export PATH=$rootdir/thirdParty/Mambaforge/bin:$rootdir/bin:$PATH;
+if [ -e $rootdir/thirdParty/Mambaforge/envs/piret ]
 then
-  rm -rf $rootdir/thirdParty/Anaconda3/envs/piret
-fi 
+  rm -rf $rootdir/thirdParty/Mambaforge/envs/piret
+fi
 ./installer.sh piret
-ln -sf $rootdir/thirdParty/piret $rootdir/bin/piret
+ln -sf $rootdir/thirdParty/PyPiReT $rootdir/bin/piret
 export PATH=$Org_PATH
 cd $rootdir/thirdParty
 echo "
@@ -193,7 +196,7 @@ sed -i.bak 's/kMaxShortSequence = 128/kMaxShortSequence = 351/' src/sequence/sho
 sed -i.bak 's/kNumUint64 = 4/kNumUint64 = 6/' src/basic/kmer.h
 #src/sequence/short_sequence.h:    static const uint32_t kMaxShortSequence = 128
 ./configure --prefix=$rootdir CXXFLAGS='-g -O2 -std=c++03'
-make 
+make >/dev/null || make
 make install
 cp bin/idba_ud $rootdir/bin/.
 cp bin/fq2fa $rootdir/bin/.
@@ -213,7 +216,7 @@ echo "
 
 
 install_spades(){
-local VER=3.13.0
+local VER=3.15.5
 echo "------------------------------------------------------------------------------
                            Installing SPAdes $VER
 ------------------------------------------------------------------------------
@@ -229,16 +232,15 @@ echo "
 }
 
 install_megahit(){
-local VER=1.1.3
-## --version MEGAHIT v1.1.3
+local VER=1.2.9
+## --version MEGAHIT v1.2.9
 echo "------------------------------------------------------------------------------
                            Installing megahit $VER
 ------------------------------------------------------------------------------
 "
 tar xvzf megahit-$VER.tar.gz 
 cd megahit-$VER
-make
-cp -f megahit* $rootdir/bin/
+cp -f bin/megahit* $rootdir/bin/
 cd $rootdir/thirdParty
 echo "
 ------------------------------------------------------------------------------
@@ -248,7 +250,7 @@ echo "
 }
 
 install_unicycler(){
-local VER=0.4.8
+local VER=0.5.0
 echo "------------------------------------------------------------------------------
                            Installing Unicycler $VER
 ------------------------------------------------------------------------------"
@@ -256,9 +258,9 @@ if  ( echo ${gcc_version%.*} | awk '{if($1>="4.9") exit 0; else exit 1}' )
 then
 	tar xvzf Unicycler-$VER.tar.gz
 	sed -i.bak 's,min(8,min(4,g' Unicycler-$VER/setup.py
-	$anaconda3bin/pip install Unicycler-$VER/
+	$mambaforgebin/pip install Unicycler-$VER/
 else
-	$anaconda3bin/conda install -y -c bioconda unicycler
+	$mambaforgebin/mamba install -y -c bioconda unicycler
 fi
 
 echo "
@@ -278,7 +280,7 @@ cd racon-v$VER
 mkdir -p build
 cd build
 cmake -DCMAKE_BUILD_TYPE=Release -Dracon_build_wrapper=ON -Dspoa_optimize_for_portability=ON ..
-make
+make >/dev/null || make
 cp -f bin/racon* $rootdir/bin/
 cd $rootdir/thirdParty
 echo "
@@ -315,7 +317,7 @@ echo "--------------------------------------------------------------------------
 tar xvzf tRNAscan-SE-1.3.1.tar.gz
 cd tRNAscan-SE-1.3.1
 sed -i.bak 's,home,'"$rootdir"',' Makefile
-make
+make >/dev/null || make
 make install
 make clean
 cd $rootdir/thirdParty
@@ -377,7 +379,7 @@ echo "--------------------------------------------------------------------------
 "
 tar xvzf seqtk-$VER.tgz
 cd seqtk-$VER
-make 
+make  >/dev/null || make
 cp -fR seqtk $rootdir/bin/. 
 cd $rootdir/thirdParty
 echo "
@@ -396,7 +398,7 @@ echo "--------------------------------------------------------------------------
 "
 tar xvzf bedtools-$VER.tar.gz
 cd bedtools2
-make 
+make >/dev/null || make
 cp -fR bin/* $rootdir/bin/. 
 cd $rootdir/thirdParty
 echo "
@@ -408,7 +410,7 @@ echo "
 
 install_sratoolkit()
 {
-local VER=2.9.6
+local VER=3.0.0
 echo "------------------------------------------------------------------------------
                            Installing sratoolkit.$VER-linux64
 ------------------------------------------------------------------------------
@@ -428,6 +430,8 @@ if [[ -n ${http_proxy} ]]; then
 	proxy_without_protocol=${http_proxy#http://}
         ./bin/vdb-config --proxy $proxy_without_protocol
 fi
+
+echo 'Aexyo' | ./bin/vdb-config -i | true
 
 ln -sf $HOME/.ncbi $rootdir/.ncbi
 
@@ -455,17 +459,14 @@ echo "
 
 install_ea-utils(){
 echo "------------------------------------------------------------------------------
-                           Installing ea-utils.1.1.2-537
+                           Installing ea-utils.1.1.2
 ------------------------------------------------------------------------------
 "
-tar xvzf ea-utils.1.1.2-537.tar.gz
-cd ea-utils.1.1.2-537
-PREFIX=$rootdir make install
+$mambaforgebin/mamba install -y -c bioconda ea-utils
 
-cd $rootdir/thirdParty
 echo "
 ------------------------------------------------------------------------------
-                           ea-utils.1.1.2-537 installed
+                           ea-utils.1.1.2 installed
 ------------------------------------------------------------------------------
 "
 }
@@ -480,7 +481,7 @@ echo "--------------------------------------------------------------------------
 tar xvzf R-$VER.tar.gz
 cd R-$VER
 ./configure --prefix=$rootdir
-make
+make >/dev/null || make
 make install
 cd $rootdir/thirdParty
 echo "
@@ -524,7 +525,7 @@ echo "--------------------------------------------------------------------------
 tar xvzf parallel-$VER.tar.gz
 cd parallel-$VER
 ./configure --prefix=$rootdir 
-make
+make  >/dev/null || make
 make install
 cd $rootdir/thirdParty
 echo "
@@ -614,7 +615,7 @@ echo "--------------------------------------------------------------------------
 "
 tar xvzf centrifuge-$VER-beta.tgz
 cd centrifuge-$VER-beta
-make 
+make  >/dev/null || make
 cp centrifuge $rootdir/bin/
 cp centrifuge-* $rootdir/bin/
 
@@ -670,7 +671,7 @@ echo "--------------------------------------------------------------------------
 "
 tar xvzf tabix.tgz
 cd tabix
-make
+make  >/dev/null || make
 cp tabix $rootdir/bin/.
 cp bgzip $rootdir/bin/.
 cd $rootdir/thirdParty
@@ -689,7 +690,9 @@ echo "--------------------------------------------------------------------------
 "
 tar xvzf hmmer-3.1b1.tar.gz
 cd hmmer-3.1b1/
-./configure --prefix=$rootdir && make && make install
+./configure --prefix=$rootdir 
+make  >/dev/null || make 
+make install
 cd $rootdir/thirdParty
 echo "
 ------------------------------------------------------------------------------
@@ -706,7 +709,9 @@ echo "--------------------------------------------------------------------------
 "
 tar xzvf infernal-1.1rc4.tar.gz
 cd infernal-1.1rc4/
-./configure --prefix=$rootdir && make && make install
+./configure --prefix=$rootdir
+make  >/dev/null || make
+make install
 cd $rootdir/thirdParty
 echo "
 ------------------------------------------------------------------------------
@@ -735,7 +740,7 @@ echo "
 
 install_bowtie2()
 {
-local VER=2.4.1
+local VER=2.5.1
 echo "------------------------------------------------------------------------------
                            Install bowtie2 $VER
 ------------------------------------------------------------------------------
@@ -883,7 +888,7 @@ echo "--------------------------------------------------------------------------
 "
 tar xvzf glimmer302b.tar.gz
 cd glimmer3.02/SimpleMake
-make
+make  >/dev/null || make
 cp ../bin/* $rootdir/bin/.
 cp ../scripts/* $rootdir/bin/.
 for i in $rootdir/bin/*.csh
@@ -925,7 +930,7 @@ echo "--------------------------------------------------------------------------
 "
 tar xvzf prodigal.v2_60.tar.gz
 cd prodigal.v2_60/
-make
+make  >/dev/null || make
 cp -fR prodigal $rootdir/bin
 cd $rootdir/thirdParty
 echo "
@@ -987,7 +992,8 @@ echo "--------------------------------------------------------------------------
 "
 tar xvzf bwa-0.7.12.tar.gz
 cd bwa-0.7.12
-make clean && make
+make clean 
+make  >/dev/null || make
 cp bwa $rootdir/bin/.
 cd $rootdir/thirdParty
 echo "
@@ -999,7 +1005,7 @@ echo "
 
 install_minimap2()
 {
-local VER=2.17
+local VER=2.24
 echo "------------------------------------------------------------------------------
                            Compiling minimap2 $VER
 ------------------------------------------------------------------------------
@@ -1024,7 +1030,7 @@ echo "--------------------------------------------------------------------------
 tar xvzf MUMmer3.23.tar.gz
 cd MUMmer3.23
 #for 64bit MUMmer complie
-make CPPFLAGS="-O3 -DSIXTYFOURBITS"
+make CPPFLAGS="-O3 -DSIXTYFOURBITS"  >/dev/null || make CPPFLAGS="-O3 -DSIXTYFOURBITS"
 cp nucmer $rootdir/bin/.
 cp show-coords $rootdir/bin/.
 cp show-snps $rootdir/bin/.
@@ -1085,16 +1091,16 @@ echo "
 
 install_samtools()
 {
-local VER=1.10
+local VER=1.16.1
 echo "------------------------------------------------------------------------------
                            Compiling samtools-$VER
 ------------------------------------------------------------------------------
 "
-tar xvzf samtools-$VER.tar.gz
+tar xvzf samtools-$VER.tgz
 cd samtools-$VER
 #make CFLAGS='-g -fPIC -Wall -O2'
 ./configure --prefix=$rootdir
-make
+make  >/dev/null || make
 make install
 cd $rootdir/thirdParty
 echo "
@@ -1106,15 +1112,15 @@ echo "
 
 install_bcftools()
 {
-local VER=1.10.2
+local VER=1.16
 echo "------------------------------------------------------------------------------
                            Compiling bcftools-$VER
 ------------------------------------------------------------------------------
 "
-tar xvzf bcftools-$VER.tar.gz
+tar xvzf bcftools-$VER.tgz
 cd bcftools-$VER
 ./configure --prefix=$rootdir
-make
+make >/dev/null || make
 make install
 cd $rootdir/thirdParty
 echo "
@@ -1147,7 +1153,7 @@ echo "--------------------------------------------------------------------------
 "
 tar xvzf RAxML-8.0.26.tar.gz
 cd RAxML-8.0.26
-make -f Makefile.PTHREADS.gcc
+make -f Makefile.PTHREADS.gcc  >/dev/null || make -f Makefile.PTHREADS.gcc
 cp -f raxmlHPC-PTHREADS $rootdir/bin/.
 cd $rootdir/thirdParty
 echo "
@@ -1168,7 +1174,7 @@ echo "--------------------------------------------------------------------------
 tar xvzf Parallel-ForkManager-$VER.tar.gz
 cd Parallel-ForkManager-$VER
 perl Makefile.PL
-make
+make >/dev/null || make
 cp -fR blib/lib/* $rootdir/lib/
 cd $rootdir/thirdParty
 echo "
@@ -1187,7 +1193,7 @@ echo "--------------------------------------------------------------------------
 tar xvzf Excel-Writer-XLSX-0.71.tar.gz
 cd Excel-Writer-XLSX-0.71
 perl Makefile.PL
-make
+make >/dev/null || make
 cp -fR blib/lib/* $rootdir/lib/.
 cp blib/script/extract_vba $rootdir/bin/.
 cd $rootdir/thirdParty
@@ -1207,7 +1213,7 @@ echo "--------------------------------------------------------------------------
 tar xvzf Archive-Zip-1.37.tar.gz
 cd Archive-Zip-1.37
 perl Makefile.PL
-make
+make >/dev/null || make
 cp -fR blib/lib/* $rootdir/lib/.
 cd $rootdir/thirdParty
 echo "
@@ -1227,7 +1233,7 @@ echo "--------------------------------------------------------------------------
 tar xvzf String-Approx-3.27.tar.gz
 cd String-Approx-3.27
 perl Makefile.PL 
-make
+make >/dev/null || make
 cp -fR blib/lib/* $rootdir/lib/
 mkdir -p $rootdir/lib/auto
 mkdir -p $rootdir/lib/auto/String
@@ -1250,7 +1256,7 @@ echo "--------------------------------------------------------------------------
 tar xvzf PDF-API2-2.020.tar.gz
 cd PDF-API2-2.020
 perl Makefile.PL 
-make
+make >/dev/null || make
 cp -fR blib/lib/* $rootdir/lib/.
 cd $rootdir/thirdParty
 echo "
@@ -1269,7 +1275,7 @@ echo "--------------------------------------------------------------------------
 tar xvzf JSON-2.90.tar.gz
 cd JSON-2.90
 perl Makefile.PL 
-make
+make >/dev/null || make
 cp -fR blib/lib/* $rootdir/lib/.
 cd $rootdir/thirdParty
 echo "
@@ -1288,7 +1294,7 @@ echo "--------------------------------------------------------------------------
 tar xvzf HTML-Parser-3.71.tar.gz
 cd HTML-Parser-3.71
 perl Makefile.PL 
-make
+make >/dev/null || make
 cp -fR blib/lib/* $rootdir/lib/.
 cp -fR blib/arch/auto/* $rootdir/lib/auto/.
 cd $rootdir/thirdParty
@@ -1308,7 +1314,7 @@ echo "--------------------------------------------------------------------------
 tar xvzf HTML-Template-2.6.tar.gz
 cd HTML-Template-2.6
 perl Makefile.PL
-make
+make >/dev/null || make
 cp -fR blib/lib/* $rootdir/lib/.
 cd $rootdir/thirdParty
 echo "
@@ -1327,7 +1333,7 @@ echo "--------------------------------------------------------------------------
 tar xvzf Bio-Phylo-0.58.tar.gz
 cd Bio-Phylo-0.58
 perl Makefile.PL
-make
+make >/dev/null || make
 cp -fR blib/lib/* $rootdir/lib/.
 cd $rootdir/thirdParty
 echo "
@@ -1346,7 +1352,7 @@ echo "--------------------------------------------------------------------------
 tar xvzf XML-Twig-3.48.tar.gz
 cd XML-Twig-3.48
 perl Makefile.PL -y
-make
+make >/dev/null || make
 cp -fR blib/lib/* $rootdir/lib/.
 cp -fR blib/script/* $rootdir/bin/.
 cd $rootdir/thirdParty
@@ -1367,7 +1373,7 @@ echo "--------------------------------------------------------------------------
 tar xvzf CGI-Session-4.48.tar.gz
 cd CGI-Session-4.48
 perl Makefile.PL
-make
+make >/dev/null || make
 cp -fR blib/lib/* $rootdir/lib/.
 cd $rootdir/thirdParty
 echo "
@@ -1386,7 +1392,7 @@ echo "--------------------------------------------------------------------------
 tar xvzf Email-Valid-$VER.tar.gz
 cd Email-Valid-$VER
 perl Makefile.PL
-make
+make >/dev/null || make
 cp -fR blib/lib/* $rootdir/lib/.
 cd $rootdir/thirdParty
 echo "
@@ -1405,7 +1411,7 @@ echo "--------------------------------------------------------------------------
 tar xvzf MailTools-$VER.tar.gz
 cd MailTools-$VER
 perl Makefile.PL
-make
+make >/dev/null || make
 cp -fR blib/lib/* $rootdir/lib/.
 cd $rootdir/thirdParty
 echo "
@@ -1415,77 +1421,38 @@ echo "
 "
 }
 
-install_Anaconda2()
-{
-local VER=2019.10
-echo "------------------------------------------------------------------------------
-                 Installing Python Anaconda2 $VER
-------------------------------------------------------------------------------
-"
-if [ ! -f $rootdir/thirdParty/Anaconda2/bin/python ]; then
-    bash Anaconda2-$VER-Linux-x86_64.sh -b -p $rootdir/thirdParty/Anaconda2/
-fi
-ln -fs $anaconda2bin/python $rootdir/bin
-#ln -fs $anaconda2bin/pip $rootdir/bin
-#ln -fs $anaconda2bin/conda $rootdir/bin
 
-#tar -xvzf Anaconda2Packages.tgz
-#$anaconda2bin/conda install Anaconda2Packages/conda-4.6.3-py27_0.tar.bz2
-#$anaconda2bin/conda install Anaconda2Packages/biopython-1.68-np111py27_0.tar.bz2 
-#$anaconda2bin/conda install Anaconda2Packages/blast-2.5.0-boost1.60_1.tar.bz2 
-#$anaconda2bin/conda install Anaconda2Packages/icu-58.1-0.tar.bz2 
-#$anaconda2bin/conda install Anaconda2Packages/libgcc-5.2.0-0.tar.bz2 
-#$anaconda2bin/conda install Anaconda2Packages/mysql-connector-python-2.0.4-py27_0.tar.bz2 
-#$anaconda2bin/conda install Anaconda2Packages/prodigal-2.60-1.tar.bz2 
-#$anaconda2bin/conda install Anaconda2Packages/rgi-3.1.1-py27_1.tar.bz2
-#$anaconda2bin/conda install Anaconda2Packages/subprocess32-3.2.7-py27_0.tar.bz2
-#$anaconda2bin/conda install Anaconda2Packages/cmake-3.6.3-0.tar.bz2
-#$anaconda2bin/conda install Anaconda2Packages/matplotlib-2.0.0-np111py27_0.tar.bz2
-$anaconda2bin/conda config --add channels defaults
-$anaconda2bin/conda config --add channels bioconda
-$anaconda2bin/conda config --add channels conda-forge
-$anaconda2bin/pip install biopython==1.76 xlsx2csv
-$anaconda2bin/conda install -y mysql-connector-python
-#$anaconda2bin/pip install --no-index --find-links=./Anaconda2Packages qiime
-#$anaconda2bin/pip install --no-index --find-links=./Anaconda2Packages xlsx2csv
-#$anaconda2bin/pip install --no-index --find-links=./Anaconda2Packages h5py
-$anaconda2bin/pip install matplotlib==2.2.5
-matplotlibrc=`$anaconda2bin/python -c 'import matplotlib as m; print m.matplotlib_fname()' 2>&1`
-perl -i.orig -nle 's/(backend\s+:\s+\w+)/\#${1}\nbackend : Agg/; print;' $matplotlibrc
-#rm -r Anaconda2Packages/
-echo "
-------------------------------------------------------------------------------
-                         Python Anaconda2 $VER Installed
-------------------------------------------------------------------------------
-"
-}
-
-install_Anaconda3()
+install_Mambaforge()
 {
-local VER=2020.02
+local VER=22.11.1-4
 echo "------------------------------------------------------------------------------
-                 Installing Python Anaconda3 $VER
+                 Installing Python Mambaforge $VER
 ------------------------------------------------------------------------------
 "
-if [ ! -f $rootdir/thirdParty/Anaconda3/bin/python3 ]; then
-    bash Anaconda3-$VER-Linux-x86_64.sh -b -p $rootdir/thirdParty/Anaconda3/
+if [ ! -f $rootdir/thirdParty/Mambaforge/bin/python3 ]; then
+    bash Mambaforge-pypy3-$VER-Linux-x86_64.sh -b -p $rootdir/thirdParty/Mambaforge/
 fi
-ln -fs $anaconda3bin/python3 $rootdir/bin
-$anaconda3bin/conda update -n base -y conda
-#tar -xvzf Anaconda3Packages.tgz
-#$anaconda3bin/pip install --no-index --find-links=./Anaconda3Packages CairoSVG 
-#$anaconda3bin/pip install --no-index --find-links=./Anaconda3Packages pymc3
-#$anaconda3bin/pip install --no-index --find-links=./Anaconda3Packages lzstring
-$anaconda3bin/conda config --add channels defaults
-$anaconda3bin/conda config --add channels bioconda
-$anaconda3bin/conda config --add channels conda-forge
-$anaconda3bin/conda create -y -n py36
-$anaconda3bin/pip install CairoSVG pandas pysam
-ln -fs $anaconda3bin/cairosvg $rootdir/bin
+ln -fs $mambaforgebin/python3 $rootdir/bin
+ln -fs $mambaforgebin/python $rootdir/bin
+$mambaforgebin/mamba update -n base -y --all || true
+$mambaforgebin/conda config --add channels defaults
+$mambaforgebin/conda config --add channels bioconda
+#$mambaforgebin/conda config --add channels anaconda
+$mambaforgebin/conda config --add channels conda-forge
+$mambaforgebin/mamba install -y cython ncurses
+$mambaforgebin/mamba install -y CairoSVG pandas mysql-connector-python biopython importlib-resources plotly matplotlib=3.5 scipy
+#$mambaforgebin/pip install setuptools==58.0.4
+$mambaforgebin/pip install xlsx2csv pysam
+$mambaforgebin/mamba create -y -n py38 python=3.8
+
+ln -fs $mambaforgebin/cairosvg $rootdir/bin
+
+matplotlibrc=`$mambaforgebin/python -c 'import matplotlib as m; print(m.matplotlib_fname())' 2>&1`
+perl -i.orig -nle 's/(backend\s+:\s+\w+)/\#${1}\nbackend : Agg/; s/^#backend\s+:\s+Agg/backend : Agg/; print;' $matplotlibrc
 
 echo "
 ------------------------------------------------------------------------------
-                         Python Anaconda3 $VER Installed
+                         Python Mambaforge $VER Installed
 ------------------------------------------------------------------------------
 "
 }
@@ -1495,7 +1462,7 @@ echo "--------------------------------------------------------------------------
                         Installing cmake
 ------------------------------------------------------------------------------
 "
-$anaconda2bin/conda install -y libgcc cmake
+$mambaforgebin/mamba install -y libgcc cmake
 echo "
 ------------------------------------------------------------------------------
                          cmake Installed
@@ -1508,8 +1475,8 @@ echo "--------------------------------------------------------------------------
                         Installing rapsearch2 binary
 ------------------------------------------------------------------------------
 "
-$anaconda2bin/conda install -y rapsearch-2.24-1.tar.bz2
-ln -s $anaconda2bin/rapsearch $rootdir/bin/rapsearch2
+$mambaforgebin/mamba install -y rapsearch-2.24-1.tar.bz2
+ln -fs $mambaforgebin/rapsearch $rootdir/bin/rapsearch2
 echo "
 ------------------------------------------------------------------------------
                          Rapsearch2  Installed
@@ -1518,12 +1485,12 @@ echo "
 }
 
 install_rgi(){
-local VER=5.1.0
+local VER=5.2.1
 echo "------------------------------------------------------------------------------
                         Installing RGI $VER
 ------------------------------------------------------------------------------
 "
-$anaconda3bin/conda install -y -n py36 -c bioconda rgi=5.1.0
+$mambaforgebin/mamba install -y -n py38 -c bioconda rgi=$VER || true
 
 echo "
 ------------------------------------------------------------------------------
@@ -1534,13 +1501,13 @@ echo "
 
 install_checkM()
 {
-local VER=1.1.2
+local VER=1.2.2
 echo "------------------------------------------------------------------------------
                         Installing checkM $VER
 ------------------------------------------------------------------------------
 "
-$anaconda3bin/pip install checkm-genome
-echo -e "$rootdir/database/checkM\n" | $anaconda3bin/checkm data setRoot
+$mambaforgebin/mamba install -n py38 -y checkm-genome
+$mambaforgebin/../envs/py38/bin/checkm data setRoot "$rootdir/database/checkM"
 tar -xvzf  pplacer-Linux-v1.1.alpha19.tgz 
 cp  pplacer-Linux-v1.1.alpha19/pplacer $rootdir/bin
 cp  pplacer-Linux-v1.1.alpha19/guppy $rootdir/bin
@@ -1554,17 +1521,17 @@ echo "
 
 install_qiime2()
 {
-local VER=2019.10
+local VER=2022.2
 echo "------------------------------------------------------------------------------
                         Installing QIIME2 $VER
 ------------------------------------------------------------------------------
 "
-if [ -e "$rootdir/thirdParty/Anaconda3/envs/qiime2" ]
+if [ -e "$rootdir/thirdParty/Mambaforge/envs/qiime2" ]
 then
-  rm -rf $rootdir/thirdParty/Anaconda3/envs/qiime2
+  rm -rf $rootdir/thirdParty/Mambaforge/envs/qiime2
 fi
 
-$anaconda3bin/conda env create -n qiime2 --file qiime2-2019.10-py36-linux-conda.yml
+$mambaforgebin/conda env create -n qiime2 --file qiime2-2022.2-py38-linux-conda.yml
 echo "
 ------------------------------------------------------------------------------
                          QIIME2 $VER Installed
@@ -1574,16 +1541,16 @@ echo "
 
 install_antismash()
 {
-local VER=4.2.0
+local VER=6.1.1
 echo "------------------------------------------------------------------------------
                         Installing antiSMASH $VER
 ------------------------------------------------------------------------------
 "
-if [ -e "$rootdir/thirdParty/Anaconda2/envs/antismash" ]
+if [ -e "$rootdir/thirdParty/Mambaforge/envs/antismash" ]
 then
-  rm -rf $rootdir/thirdParty/Anaconda2/envs/antismash
+  rm -rf $rootdir/thirdParty/Mambaforge/envs/antismash
 fi
-$anaconda2bin/conda create -y -n antismash antismash=4.2.0
+$mambaforgebin/mamba create -y -n antismash antismash
 echo "
 ------------------------------------------------------------------------------
                          antiSMASH $VER Installed
@@ -1598,8 +1565,8 @@ echo "--------------------------------------------------------------------------
                         Installing bokeh $VER
 ------------------------------------------------------------------------------
 "
-#$anaconda3bin/pip install  --no-index --find-links=./Anaconda3Packages bokeh==$VER
-$anaconda3bin/pip install bokeh==$VER
+#$mambaforgebin/pip install  --no-index --find-links=./MambaforgePackages bokeh==$VER
+$mambaforgebin/pip install jinja2==3.0 bokeh==$VER
 echo "
 ------------------------------------------------------------------------------
                          bokeh $VER Installed
@@ -1613,9 +1580,9 @@ echo "--------------------------------------------------------------------------
                  	Installing NanoPlot
 ------------------------------------------------------------------------------
 "
-#$anaconda3bin/pip install --no-index --find-links=./Anaconda3Packages NanoPlot
-$anaconda3bin/pip install NanoPlot
-ln -fs $anaconda3bin/NanoPlot $rootdir/bin
+#$mambaforgebin/pip install --no-index --find-links=./MambaforgePackages NanoPlot
+$mambaforgebin/mamba install -n py38 -y nanoplot=1.40
+ln -fs $mambaforgebin/../envs/py38/bin/NanoPlot $rootdir/bin
 echo "
 ------------------------------------------------------------------------------
                          NanoPlot Installed
@@ -1628,9 +1595,9 @@ echo "--------------------------------------------------------------------------
                  	Installing Porechop
 ------------------------------------------------------------------------------
 "
-#$anaconda3bin/conda install Anaconda3Packages/porechop-0.2.3_seqan2.1.1-py36_2.tar.bz2
-$anaconda3bin/conda install -n py36 -y porechop
-ln -fs $anaconda3bin/../envs/py36/bin/porechop $rootdir/bin
+#$mambaforgebin/mamba install MambaforgePackages/porechop-0.2.3_seqan2.1.1-py36_2.tar.bz2
+$mambaforgebin/mamba install -n py38 -y porechop
+ln -fs $mambaforgebin/../envs/py38/bin/porechop $rootdir/bin
 echo "
 ------------------------------------------------------------------------------
                          Porechop Installed
@@ -1650,7 +1617,7 @@ checkSystemInstallation()
 checkLocalInstallation()
 {
     IFS=:
-    for d in $rootdir/bin; do
+    for d in $rootdir/bin $mambaforgebin; do
       if test -x "$d/$1"; then return 0; fi
     done
     return 1
@@ -1882,20 +1849,6 @@ else
   exit 1
 fi
 
-if $rootdir/bin/python -c 'import Bio; print Bio.__version__' >/dev/null 2>&1
-then
-  $rootdir/bin/python -c 'import Bio; print "BioPython Version", Bio.__version__, "is found"'
-else
-  install_Anaconda2
-fi
-
-if $rootdir/bin/python3 -c 'import sys; sys.exit("Python > 3.0 required.") if sys.version_info < ( 3, 0) else ""' >/dev/null 2>&1
-then
-  $rootdir/bin/python3 -c 'import sys; print( "Python3 version %s.%s found." % (sys.version_info[0],sys.version_info[1]))'
-else
-  install_Anaconda3
-fi
-
 if ( checkSystemInstallation cmake )
 then
   echo "cmake is found"
@@ -1948,10 +1901,18 @@ fi
 
 install_Rpackages
 
+
+if $rootdir/bin/python3 -c 'import sys; sys.exit("Python > 3.0 required.") if sys.version_info < ( 3, 0) else ""' >/dev/null 2>&1
+then
+  $rootdir/bin/python3 -c 'import sys; print( "Python3 version %s.%s found." % (sys.version_info[0],sys.version_info[1]))'
+else
+  install_Mambaforge
+fi
+
 if ( checkSystemInstallation bedtools )
 then
   bedtoolsVER=`bedtools --version | perl -nle 'print $& if m{\d+\.\d+}'`;
-  if  ( echo  $bedtoolsVER | awk '{if($1>="2.27") exit 0; else exit 1}' )
+  if [ $(versionStr $bedtoolsVER) -ge $(versionStr "2.27") ]
   then 
      echo "bedtools $bedtoolsVER is found"
   else
@@ -1979,7 +1940,7 @@ fi
 if ( checkSystemInstallation fastq-dump )
 then
   sratoolkit_VER=`fastq-dump --version | perl -nle 'print $& if m{\d\.\d\.\d}'`;
-  if  ( echo $sratoolkit_VER | awk '{if($1>="2.9.2") exit 0; else exit 1}' )
+  if  ( echo $sratoolkit_VER | awk '{if($1>="2.9.6") exit 0; else exit 1}' )
   then
     echo "sratoolkit $sratoolkit_VER found"
   else
@@ -1990,7 +1951,7 @@ else
   install_sratoolkit
 fi
 
-if ( checkSystemInstallation fastq-join )
+if ( checkLocalInstallation fastq-join )
 then
   echo "fastq-join is found"
 else
@@ -2332,9 +2293,9 @@ fi
 
 if ( checkSystemInstallation megahit  )
 then
-  ## --version MEGAHIT v1.1.3
-  megahit_VER=`megahit --version | perl -nle 'print $& if m{\d\.\d.\d}'`;
-  if  ( echo $megahit_VER | awk '{if($1>="1.1.3") exit 0; else exit 1}' )
+  ## --version MEGAHIT v1.2.9
+  megahit_VER=`megahit --version 2>&1 | perl -nle 'print $& if m{\d\.\d.\d}'`;
+  if [ $(versionStr $megahit_VER) -ge $(versionStr "1.2.9") ]
   then
     echo "megahit $megahit_VER found"
   else
@@ -2345,9 +2306,9 @@ else
   install_megahit
 fi
 
-if [ -x "$rootdir/thirdParty/Anaconda3/bin/unicycler" ]
+if [ -x "$rootdir/thirdParty/Mambaforge/bin/unicycler" ]
 then
-  unicycler_installed_VER=`$rootdir/thirdParty/Anaconda3/bin/unicycler --version | perl -nle 'print $1 if m{v(\d+\.\d+\.*\d*)}'`;
+  unicycler_installed_VER=`$rootdir/thirdParty/Mambaforge/bin/unicycler --version | perl -nle 'print $1 if m{v(\d+\.\d+\.*\d*)}'`;
   if ( echo $unicycler_installed_VER | awk '{if($1>="0.4.7") exit 0; else exit 1}' )
   then
     echo "Unicycler $unicycler_installed_VER found"
@@ -2511,10 +2472,10 @@ else
     install_rapsearch2
 fi
 
-if [ -x "$anaconda3bin/../envs/py36/bin/rgi" ]
+if [ -x "$mambaforgebin/../envs/py38/bin/rgi" ]
 then
-  RGI_VER=`$anaconda3bin/../envs/py36/bin/rgi main -v| perl -nle 'print $& if m{\d\.\d+\.\d+}'`;
-  if ( echo $RGI_VER | awk '{if($1 >="5.1.0") exit 0; else exit 1}' )
+  RGI_VER=`$mambaforgebin/../envs/py38/bin/rgi main -v| perl -nle 'print $& if m{\d\.\d+\.\d+}'`;
+  if [ $(versionStr $RGI_VER) -ge $(versionStr "5.1.0") ]
   then
     echo "RGI $RGI_VER is found"
   else
@@ -2541,10 +2502,10 @@ else
     install_NanoPlot
 fi
 
-if [ -x "$anaconda3bin/../envs/qiime2/bin/qiime" ]
+if [ -x "$mambaforgebin/../envs/qiime2/bin/qiime" ]
 then
-  qiime2_VER=`$anaconda3bin/../envs/qiime2/bin/qiime --version | perl -nle 'print $& if m{\d+\.\d+}'`;
-  if ( echo $qiime2_VER | awk '{if($1 >="2019.10") exit 0; else exit 1}' )
+  qiime2_VER=`$mambaforgebin/../envs/qiime2/bin/qiime --version | perl -nle 'print $& if m{\d+\.\d+}'`;
+  if [ $(versionStr $qiime2_VER) -ge $(versionStr "2021.8") ]
   then
     echo "QIIME2 $qiime2_VER is found"
   else
@@ -2556,10 +2517,10 @@ else
 fi
 
 
-if [ -x "$anaconda2bin/../envs/antismash/bin/antismash" ]
+if [ -x "$mambaforgebin/../envs/antismash/bin/antismash" ]
 then
-  antismash_VER=`$anaconda2bin/../envs/antismash/bin/antismash -V | perl -nle 'print $& if m{\d\.\d+\.\d+}'`;
-  if [ $(versionStr $antismash_VER) -ge $(versionStr "4.2.0") ]
+  antismash_VER=`$mambaforgebin/../envs/antismash/bin/antismash -V | perl -nle 'print $& if m{\d\.\d+\.\d+}'`;
+  if [ $(versionStr $antismash_VER) -ge $(versionStr "6.1.1") ]
   then
     echo "antiSMASH $antismash_VER is found"
   else
@@ -2570,9 +2531,9 @@ else
   install_antismash
 fi
 
-if [ -x "$anaconda3bin/checkm" ]
+if [ -x "$mambaforgebin/../envs/py38/bin/checkm" ]
 then
-  checkM_VER=`$anaconda3bin/checkm | grep "CheckM v" |perl -nle 'print $& if m{\d\.\d+\.\d+}'`;
+  checkM_VER=`$mambaforgebin/../envs/py38/bin/checkm | grep "CheckM v" |perl -nle 'print $& if m{\d\.\d+\.\d+}'`;
   if ( echo $checkM_VER | awk '{if($1 >="1.1.0") exit 0; else exit 1}' )
   then
     echo "checkM $checkM_VER is found"
@@ -2584,9 +2545,9 @@ else
   install_checkM
 fi
 
-if [ -x "$anaconda3bin/bokeh" ]
+if [ -x "$mambaforgebin/bokeh" ]
 then
-  bokeh_VER=`$anaconda3bin/bokeh --version |perl -nle 'print $& if m{\d\.\d+\.\d+}'`;
+  bokeh_VER=`$mambaforgebin/bokeh --version |perl -nle 'print $& if m{\d\.\d+\.\d+}'`;
   if ( echo $bokeh_VER | awk '{if($1=="1.1.0") exit 0; else exit 1}' )
   then
     echo "bokeh $bokeh_VER is found"
@@ -2598,7 +2559,7 @@ else
   install_bokeh
 fi
 
-if ( checkLocalInstallation DETEQT )
+if [ -x $rootdir/bin/DETEQT/DETEQT ]
 then
   DETEQT_VER=`$rootdir/bin/DETEQT/DETEQT -V | perl -nle 'print $& if m{Version \d+\.\d+\.\d+}'`;
   if  ( echo $DETEQT_VER | awk '{if($2>="0.3.1") exit 0; else exit 1}' )
@@ -2613,10 +2574,12 @@ else
 fi
 
 
-if ( checkLocalInstallation piret)
+if [ -x $mambaforgebin/../envs/piret/bin/piret ]
 then
-  PiReT_VER=`grep "version=" $rootdir/bin/piret/bin/piret -v | perl -nle 'print $& if m{\d+\.\d+\.*\d*}'`;
-  if  ( echo $PiReT_VER | awk '{if($1>="0.3") exit 0; else exit 1}' )
+  source $mambaforgebin/activate $mambaforgebin/../envs/piret
+  PiReT_VER=`$mambaforgebin/../envs/piret/bin/python $rootdir/bin/piret/bin/piret -v | perl -nle 'print $& if m{\d+\.\d+\.*\d*}'`;
+  source $mambaforgebin/deactivate || true
+  if [ $(versionStr $PiReT_VER) -ge $(versionStr "0.3") ]
   then
     echo "PyPiReT is found"
   else
@@ -2875,9 +2838,9 @@ fi
 
 
 ## Cleanup
-#rm -rf $rootdir/thirdParty/Anaconda3Packages/
-$anaconda2bin/conda clean -y -a
-$anaconda3bin/conda clean -y -a
+#rm -rf $rootdir/thirdParty/MambaforgePackages/
+$mambaforgebin/conda clean -y -a
+$mambaforgebin/pip cache purge
 
 # set up a cronjob for project old files clena up
 echo "01 00 * * * perl $rootdir/edge_ui/cgi-bin/edge_data_cleanup.pl" | crontab -

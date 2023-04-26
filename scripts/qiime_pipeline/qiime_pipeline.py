@@ -252,10 +252,10 @@ def get_fastq_manifest(mappingFile,in_dir,out_dir):
     f_index = 0
     for line in f:
         if not line.strip():continue
-        temp = line.split('\t')
+        temp = line.strip().split('\t')
         if line.lower().startswith('#'):
             if 'files' in line.lower():
-                header = line.lower().split('\t')
+                header = line.lower().strip().split('\t')
                 f_index = header.index('files')
         else:
             if (f_index > 0):
@@ -268,11 +268,11 @@ def get_fastq_manifest(mappingFile,in_dir,out_dir):
             else:
                 sys.exit("[ERROR] 'Files' column not found in meta data mapping file.")
    
-            f_fq = f_fq.replace('"', '')
+            f_fq = f_fq.replace('"', '').strip()
             mf.write('%s,%s/%s,%s\n' % (temp[0],abs_inDir,f_fq,'forward'))
             symlink_force(abs_inDir+'/'+ f_fq,out_dir + '/input/' + os.path.basename(f_fq))
             if (type == 'pe'):
-                r_fq = r_fq.replace('"', '')
+                r_fq = r_fq.replace('"', '').strip()
                 mf.write('%s,%s/%s,%s\n' % (temp[0],abs_inDir,r_fq,'reverse'))
                 symlink_force(abs_inDir+'/'+ r_fq,out_dir + '/input/' + os.path.basename(r_fq))
 
@@ -698,7 +698,7 @@ if __name__ == '__main__':
 
                 file_for_check_truncate_len = 'demux-joined/quality-plot.html'
 
-                qf_cmd = ('qiime quality-filter q-score-joined --i-demux demux/demux-joined.qza --o-filtered-sequences QCandFT/filtered.qza '
+                qf_cmd = ('qiime quality-filter q-score --i-demux demux/demux-joined.qza --o-filtered-sequences QCandFT/filtered.qza '
                         '--p-min-quality %s '
                         '--p-min-length-fraction %s '
                         '--p-max-ambiguous %s '
@@ -743,9 +743,9 @@ if __name__ == '__main__':
             elif argvs.qcMethod.lower() == 'otus':
                 reference_seqs = target_path + '/gg-13-8-99.qza'
                 if (argvs.target.lower() == 'silva'):
-                    reference_seqs = target_path + '/silva-132-99.qza'
+                    reference_seqs = target_path + '/silva-138-99.qza'
                 elif (argvs.target.lower() == 'silva-v3-v4'):
-                    reference_seqs = target_path + '/silva_132_99PercClust_16SOnly_unaligned_F341Mod_R806Mod_primerMatchPortionOnly_forTaxClassTraining.qza'
+                    reference_seqs = target_path + '/silva_138_99PercClust_16SOnly_unaligned_F341Mod_R806Mod_primerMatchPortionOnly_forTaxClassTraining.qza'
                 elif (argvs.target.lower() == 'its'):
                     reference_seqs = target_path + '/ITS.qza'
 
@@ -832,7 +832,7 @@ if __name__ == '__main__':
             shutil.rmtree('DiversityAnalysis',ignore_errors=True)
         diversity_cmd = ("qiime diversity core-metrics-phylogenetic --i-phylogeny PhyloAnalysis/rooted-tree.qza --i-table QCandFT/table.qza "
                          "--p-sampling-depth %d --m-metadata-file %s --output-dir DiversityAnalysis " 
-                         "--p-n-jobs %d " ) % (samplingDepth,mappingFile, int(argvs.cpus/2) if argvs.cpus > 1 else 1 )
+                         "--p-n-jobs-or-threads %d " ) % (samplingDepth,mappingFile, int(argvs.cpus/2) if argvs.cpus > 1 else 1 )
         process_cmd(diversity_cmd, 'Alpha and Beta diversity analyses')
         beta_analysis_results = ['unweighted_unifrac','jaccard','bray_curtis','weighted_unifrac']
         for x in beta_analysis_results:
@@ -881,9 +881,9 @@ if __name__ == '__main__':
     # Taxonomic analysis
     nb_classifier = target_path + '/gg-13-8-99-nb-classifier.qza'
     if (argvs.target.lower() == 'silva'):
-        nb_classifier = target_path + '/silva-132-99-nb-classifier.qza'
+        nb_classifier = target_path + '/silva-138-99-nb-classifier.qza'
     elif (argvs.target.lower() == 'silva-v3-v4'):
-        nb_classifier = target_path + '/silva_132_99PercClust_16SOnly_unaligned_F341Mod_R806Mod_primerMatchPortionOnly_7LevelTaxonomy_naiveBayesClassifier.qza'
+        nb_classifier = target_path + '/silva_138_99PercClust_16SOnly_unaligned_F341Mod_R806Mod_primerMatchPortionOnly_7LevelTaxonomy_naiveBayesClassifier.qza'
     elif (argvs.target.lower() == 'its'):
         nb_classifier = target_path + '/ITS.classifier.qza'
 

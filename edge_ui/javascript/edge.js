@@ -362,7 +362,31 @@ $( document ).ready(function()
 			},100);
 		});
 	});
-		
+	
+	$('#signIn-guest').on('click', function(e){
+		$.ajax({
+			type: "POST",
+			url: "./cgi-bin/edge_user_management.cgi",
+			dataType: "json",
+			cache: false,
+			data: $.param({"action": "guestlogin",'protocol': location.protocol, 'sid': localStorage.sid}),
+			beforeSend: function(){
+        			$('#signInForm').popup('close');
+			},
+			success: function(data){
+				if (data.error){
+					showWarning("Failed to use GUEST acoount to login in." + data.error + " Please check server error log for detail.");
+				}else{
+					data.username = data.email;
+					login(data);
+				}
+			},
+			error: function(XMLHttpRequest, textStatus, errorThrown) {
+				showWarning("Failed to use GUEST acoount to login in. Please check server error log for detail.");
+			}
+		});
+	});
+
 	function socialLogin(response){
 		$.ajax({
 			type: "POST",
@@ -454,15 +478,21 @@ $( document ).ready(function()
  						localStorage.background=data.userbackground;
 					}
 					var cleanData = (data.CleanData > 0);
-					if (  LoginMsg && cleanData ){
-						showWarning("The intermediate bam/sam/fastq/gz files in the projects directory will be deleted if they are older than "+ data.CleanData  + " days. <br/><p><input type='checkbox' data-role='none' id='chk-close-warning'>Don't show this again.</p>");
-						$('#chk-close-warning').click(function(){
-							if ($('#chk-close-warning').is(':checked')) {
-								localStorage.LoginMsg = false;
-							}else{
-								localStorage.LoginMsg = true;
-							}
-						});
+					if ( data.firstname === "Guest" && data.lastname === "EDGE"){
+						$('#UpdateProfileBtn').hide();
+						showWarning("The data and projects of Guest account will be delete in 24 hours.");
+					}else{
+						$('#UpdateProfileBtn').show();
+						if (  LoginMsg && cleanData ){
+							showWarning("The intermediate bam/sam/fastq/gz files in the projects directory will be deleted if they are older than "+ data.CleanData  + " days. <br/><p><input type='checkbox' data-role='none' id='chk-close-warning'>Don't show this again.</p>");
+							$('#chk-close-warning').click(function(){
+								if ($('#chk-close-warning').is(':checked')) {
+									localStorage.LoginMsg = false;
+								}else{
+									localStorage.LoginMsg = true;
+								}
+							});
+						}
 					}
 
           			} // if
@@ -810,6 +840,9 @@ $( document ).ready(function()
 	$('#edge-megahit-preset-l').tooltipster(
 		'content', $('<span><table border="1"><tr><th>Presets</th><th>Targeting applications</th></tr><tr><td>meta</td><td>General metagenome assembly, such as guts</td></tr><tr><td>meta-sensitive</td><td>More sensitive metagenome assembly, but slower</td></tr><tr><td>meta-large</td><td>Large and complex metagenome assembly, such as soil</td></tr></table></span>')
 	);
+	$('#edge-spades-algorithm-l').tooltipster(
+                'content', $('<span><table border="1"><tr><th>Algorithm</th><th>Targeting applications</th></tr><tr><td>Default</td><td>General genome assembly</td></tr><tr><td>Single-cell</td><td>MDA (single-cell) data</td></tr><tr><td>Metagenome</td><td>Complex metagenome assembly</td></tr><tr><td>Plasmids</td><td>plasmidSPAdes pipeline for plasmid detection</td></tr><tr><td>RNAseq</td><td>Transcriptome assembly</td></tr><tr><td>Biosynthetic</td><td>non-ribosomal and polyketide gene clusters assembly</td></tr><tr><td>Corona</td><td>coronavirus assembly</td></tr><tr><td>Metaviral</td><td>extracting extrachromosomal elements from metagenomic assemblies</td></tr><tr><td>Metaplasmid</td><td>plasmid detection in metagenomic datasets</td></tr><tr><td>RNA viral</td><td>virus assembly module from RNA-Seq data</td></tr></table></span>')
+        );
 	$('#edge-piret-method-l').tooltipster(
 		'content', $('<span>For detecting differentially expressed genes, all of which are R packages. This option provides users with multiple tools to use which can be spcified using following keywords:<table border="1"><tr><th>Methods</th><th>Descriptions</th></tr><tr><td><a href="http://bioconductor.org/packages/release/bioc/html/edgeR.html" target="_blank">edgeR</a></td><td>Uses edgeR.</td></tr><tr><td><a href="http://bioconductor.org/packages/release/bioc/html/DESeq2.html" target="_blank">DESeq2</a></td><td>Uses DESeq2.</td></tr><tr><td><a href="http://bioconductor.org/packages/release/bioc/html/ballgown.html" target="_blank">ballgown</a></td><td>Uses ballgown. Appropriate for eukaryotes.</td></tr><td>DEedge</td><td>Uses both edgeR and DESeq2.</td></tr><tr><td>DEgown</td><td>Uses DESeq2 and ballgown.</td></tr><tr><td>balledgeR</td><td>Uses ballgown and edgeR.</td></tr><tr><td>all</td><td>Uses all of the above methods.</td></tr></table></span>')
 	);
@@ -829,6 +862,9 @@ $( document ).ready(function()
 	$("#edge-lrasm-algorithm-tooltip").tooltipster(
  		'content',$('<span><a href="https://www.ncbi.nlm.nih.gov/pubmed/27153593" target="_blank">miniasm</a> is a fast OLC-based de novo assembler for noisy long reads. It takes all-vs-all read self-mappings (<a href="https://github.com/lh3/minimap2" target="_blank">minimap2</a>) as input and outputs an assembly graph in the GFA format. <a href="https://github.com/ruanjue/wtdbg2" target="_blank">wtdbg2</a> uses fuzzy Bruijn graph approach to do long noisy reads assembly. It is able to assemble large/deep/complex genome at a speed tens of times faster than OLC-based assembler with comparable base accuracy. <a href="https://github.com/fenderglass/Flye" target="_blank">Flye</a> is a de novo assembler for single molecule sequencing reads, such as those produced by PacBio and Oxford Nanopore Technologies. It is designed for a wide range of datasets, from small bacterial projects to large mammalian-scale assemblies. metaFlye is a special mode of Flye for metagenome assembly. </span>')
  	);
+	$("#edge-anno-gcode-tooltip").tooltipster(
+                 'content', $('<span>The genetic code will change according to the kingdom selected. Or you can specify it here. Please see <a href="https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi" target="_blank">detailed</a>. </span>')
+        );
 
 	// filter serach callBack function
 	function revealOrSearch ( index, searchValue ) {
@@ -1038,6 +1074,9 @@ $( document ).ready(function()
 						$('#edge-hostrm-sw1').click().checkboxradio('refresh');
 					}
 					if ( /edge-r2g-align-trim-bed-file/.test(inputFileID)  ){
+						if ($(":radio[name='edge-fastq-source']:checked").val() == "nanopore" || $(":radio[name='edge-fastq-source']:checked").val() == "pacbio"){
+							$('#edge-r2g-con-altIndel-prop').prop('disabled',false).val('0.6').slider("refresh");
+						}
 						$("#edge-r2g-con-pcrdedup-sw2").prop('disabled',false).click().checkboxradio("refresh");
 					}
 				}
@@ -1191,29 +1230,6 @@ $( document ).ready(function()
 			//alert('maximum fields reached')
 		}   
 	});
-	$('.btnAdd-edge-ref-file').click( function(e) {
-                e.preventDefault();
-                // how many "duplicatable" input fields we currently have
-                var num = $('.edge-ref-file-block').length;
-                console.log(num);       
-                // the numeric ID of the new input field being added    
-                var newNum      = new Number(num + 1);  
-                var newElem = $('#edge-ref-file-block' + num ).clone().attr('id', 'edge-ref-file-block' + newNum);
-                newElem.find('label:first').attr( 'for', 'edge-ref-file-' + newNum ).text('Reference genome (' + newNum + ')');
-                newElem.find('input:first').attr( 'id', 'edge-ref-file-' + newNum ).attr('name', 'edge-ref-file');
-                newElem.find('.btnAdd-edge-ref-file').remove();
-                // insert newElem
-                $('#edge-ref-file-block' + num).after(newElem);
-                        // bind the selector 
-                        newElem.find(".edge-file-selector").on( "click", function() {
-                        inputFileID = $(this).prevAll().children().prop("id");
-                });
-                // business rule: limit the number of fields to 5
-                if (newNum == 5) {
-                        $('.btnAdd-edge-ref-file' ).addClass('ui-disabled');
-                        //alert('maximum fields reached')
-                }   
-        });
 
 	$( ".edge-collapsible-options > select" ).on( "change", function() {
 		collapsible_select_sync();
@@ -1240,11 +1256,13 @@ $( document ).ready(function()
 		collapsible_select_sync();
 	});
 
+	$( " #edge-runEDGE-jbrowse" ).collapsible("disable");
 	$( ".edge-collapsible-options div.ui-slider-switch" ).on( "mouseover", function() {
 		$(this).parents('div[data-role="collapsible"]').collapsible("disable");
 	});
 	$( ".edge-collapsible-options div.ui-slider-switch" ).on( "mouseout", function() {
 		$(this).parents('div[data-role="collapsible"]').collapsible("enable");
+		$( " #edge-runEDGE-jbrowse" ).collapsible("disable");
 	});
 
 	$( "#edge-view-log-btn" ).on( "mouseover", function() {
@@ -1949,6 +1967,23 @@ $( document ).ready(function()
 				$('#edge-anno-kegg').hide();
 			}
 		});
+		$(":radio[name='edge-anno-kingdom']").on("change", function(){
+			if($('#edge-anno-kingdom1').is(':checked')){
+				$('#edge-anno-gcode').val('11');
+			}
+			if($('#edge-anno-kingdom2').is(':checked')){
+				$('#edge-anno-gcode').val('11');
+			}
+			if($('#edge-anno-kingdom3').is(':checked')){
+				$('#edge-anno-gcode').val('5');
+			}
+			if($('#edge-anno-kingdom4').is(':checked')){
+				$('#edge-anno-gcode').val('1');
+			}
+			if($('#edge-anno-kingdom5').is(':checked')){
+				$('#edge-anno-gcode').val('11');
+			}
+		});
 		$('#edge-r2g-con-options').hide();
 		$(":radio[name='edge-r2g-getconsensus-sw']").on("change",function(){
 			if($('#edge-r2g-getconsensus-sw1').is(':checked')){
@@ -2026,7 +2061,11 @@ $( document ).ready(function()
 				$('#edge-r2c-aligner3').click().checkboxradio("refresh");
 			}
 		});
-		
+		$(":radio[name='edge-binning-checkM-sw']").on("change", function(){
+                        if($('#edge-binning-checkM-sw1').is(':checked')){
+                                $('#edge-binning-sw1').click().checkboxradio("refresh");
+                        }
+                });
 		$('#edge-assembled-conti-file-div').hide();
 		$(":radio[name='edge-assembled-contig-sw']").on("change", function(){
 			if($('#edge-assembled-contig1').is(':checked')){
@@ -2108,6 +2147,16 @@ $( document ).ready(function()
 				$('#edge-piret-method').selectmenu("refresh",true);
 			}
 		});
+		$(":radio[name='edge-porechop-sw']").on("change", function(){
+			if($('#edge-fastq-source-sw1').is(':checked')){
+				if( ! $('#edge-r2g-align-trim-bed-file').val()){
+					$('#edge-r2g-con-altIndel-prop').prop('disabled',false).val('0.8').slider("refresh");
+				}else{
+					$('#edge-r2g-con-altIndel-prop').prop('disabled',false).val('0.6').slider("refresh");
+					//$( "#edge-r2g-variantcall-sw1").prop('disabled',false).click().checkboxradio("refresh");
+				}
+			}
+		});
 		//$('.edge-nanopore-options').hide();
 		$(":radio[name='edge-fastq-source']").on("change", function(){
 			$( "#edge-r2g-aligner-sw, #edge-r2c-aligner-sw").find('input').prop('disabled',false);
@@ -2121,16 +2170,23 @@ $( document ).ready(function()
 				$( "a[data-id=edge-joinpe-parameters]").addClass('ui-disabled');
 				$('label[for=\"edge-r2c-aligner1\"], label[for=\"edge-r2g-aligner1\"]').addClass('ui-disabled');
 				$('#edge-r2c-aligner1, #edge-r2g-aligner1').addClass('ui-disabled');
+				if ($('#edge-r2g-align-trim-bed-file').val().length > 1){
+					$('#edge-r2g-con-altIndel-prop').prop('disabled',false).val('0.6').slider("refresh");
+				}
 				if (type != "reconfig"){
+					$( "#edge-qc-sw1").prop('disabled',false).click().checkboxradio("refresh");
 					$( "#edge-r2g-variantcall-sw2").prop('disabled',false).click().checkboxradio("refresh");
 					$( "#edge-r2g-aligner3, #edge-r2c-aligner3, #edge-assembler5" ).prop('disabled',false).click().checkboxradio("refresh");
+					$( "#edge-lrasm-preset1").prop('disabled',false).click().checkboxradio("refresh");
 					$('#edge-qc-minl').prop('disabled',false).val('1000');
 					$('#edge-r2g-max-clip').prop('disabled',false).val('150');
 					$('#edge-qc-q').prop('disabled',false).val('7');
 					$('#splitrim-minq').prop('disabled',false).val('7');
 					$( '#edge-r2g-con-min-baseQ').prop('disabled',false).val(5);
 					$('#edge-r2g-con-altIndel-prop').prop('disabled',false).val('0.8').slider("refresh");
-					$('#edge-r2g-con-disableBAQ-sw1').prop('disabled',false).click().checkboxradio("refresh");
+					//$('#edge-r2g-con-disableBAQ-sw1').prop('disabled',false).click().checkboxradio("refresh");
+					//$('#edge-r2g-con-homopolymer-filter-sw1').prop('disabled',false).click().checkboxradio("refresh");
+					//$('#edge-r2g-con-strandbiase-filter-sw1').prop('disabled',false).click().checkboxradio("refresh");
 				}
 			}
 			if($('#edge-fastq-source-sw2').is(':checked')){
@@ -2143,6 +2199,7 @@ $( document ).ready(function()
 				$('label[for=\"edge-r2c-aligner1\"], label[for=\"edge-r2g-aligner1\"]').removeClass('ui-disabled');
 				$('#edge-r2c-aligner1, #edge-r2g-aligner1').removeClass('ui-disabled');
 				if (type != "reconfig"){
+					$( "#edge-qc-sw1").prop('disabled',false).click().checkboxradio("refresh");
 					$( "#edge-r2g-variantcall-sw1").prop('disabled',false).click().checkboxradio("refresh");
 					$( '#edge-r2g-con-min-baseQ').prop('disabled',false).val(20);
 					$( "#edge-r2g-aligner2, #edge-r2c-aligner2, #edge-assembler1" ).prop('disabled',false).click().checkboxradio("refresh");
@@ -2151,20 +2208,26 @@ $( document ).ready(function()
 					$('#edge-qc-q').prop('disabled',false).val('20');
 					$('#splitrim-minq').prop('disabled',false).val('20');
 					$('#edge-r2g-con-altIndel-prop').prop('disabled',false).val('0.5').slider("refresh");
-					$('#edge-r2g-con-disableBAQ-sw2').prop('disabled',false).click().checkboxradio("refresh");
+					//$('#edge-r2g-con-disableBAQ-sw2').prop('disabled',false).click().checkboxradio("refresh");
+					//$('#edge-r2g-con-homopolymer-filter-sw2').prop('disabled',false).click().checkboxradio("refresh");
+					//$('#edge-r2g-con-strandbiase-filter-sw2').prop('disabled',false).click().checkboxradio("refresh");
 				}
 			}
 		});
 		$("#edge-r2g-aligner2,#edge-r2g-aligner3").on('click',function(){
 			$("#edge-r2g-con-min-mapQ").val('60');
+			$("#edge-r2g-min-mapQ").val('60');
 		});
 		$("#edge-r2g-aligner1").on('click',function(){
 			$("#edge-r2g-con-min-mapQ").val('42');
+			$("#edge-r2g-min-mapQ").val('42');
 		});
 		$("label[for=edge-qc-adapter]").parent().hide();
 		$(":radio[name='edge-r2g-align-trim-sw']").on("change", function(){
-			$('#edge-qc-adapter').val('');
-			$('#edge-r2g-align-trim-bed-file').val('');
+			if (type != "reconfig"){
+				$('#edge-qc-adapter').val('');
+				$('#edge-r2g-align-trim-bed-file').val('');
+			}
 			if($('#edge-r2g-align-trim-sw1').is(':checked')){
 				$("label[for=edge-qc-adapter]").parent().hide();
 				$("label[for=edge-r2g-align-trim-bed-file]").parent().show();
@@ -2711,9 +2774,14 @@ $( document ).ready(function()
 				unstart_proj	= 0;
 				//force logout
 				if( obj.INFO.SESSION_STATUS === "invalid" && localStorage.sid ){
-					logout("Session expired. Please login again.");
-					return;
+					if ( localStorage.fnname != "Guest" && localStorage.lnname != "EDGE" ){
+						logout("Session expired. Please login again.");
+						return;
+					}
 				}
+				if ( localStorage.fnname != "Guest" && localStorage.lnname != "EDGE" ){
+                                        $('#UpdateProfileBtn').hide();
+                                }
 
 				//resource usage bar
 				$("#cpu-usage-bar").val(obj.INFO.CPUU).slider("refresh");
@@ -3031,7 +3099,7 @@ $( document ).ready(function()
 			  if (! umSystemStatus){
 				return true;
 			  }
-                          var url = "./cgi-bin/plupload_session.cgi?sid="+localStorage.sid;
+			  var url = "./cgi-bin/plupload_session.cgi?sid="+localStorage.sid+";fn="+localStorage.fnname+";ln="+localStorage.lnname ;
                           $.ajax({
                              type: "GET",
                              url: url,
@@ -4265,8 +4333,8 @@ $( document ).ready(function()
                                                         $('#edge-fastq-source-sw1').click().checkboxradio("refresh");
                                                         $("#edge-pp-sw").val(0).slider("refresh");
                                                         $("#edge-qc-sw2").click().checkboxradio("refresh");
-                                                        $('#edge-r2c-aligner-options').val("-x map-pb")
-                                                        $('#edge-r2g-aligner-options').val("-x map-pb")
+                                                        //$('#edge-r2c-aligner-options').val("-x map-pb")
+                                                        //$('#edge-r2g-aligner-options').val("-x map-pb")
                                                         var msg = obj.INFO + " EDGE will turn on Nanopore Reads Mode and Quality Trim and Filter Off.";
                                                         showWarning(msg);
                                                 }

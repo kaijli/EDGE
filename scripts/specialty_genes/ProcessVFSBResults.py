@@ -4,7 +4,7 @@ import argparse
 import re
 import mysql.connector as mysql
 from mysql.connector import errorcode
-import ConfigParser
+import configparser
 import json
 import subprocess
 from Bio import SeqIO
@@ -12,7 +12,7 @@ from Bio import SeqIO
 #-------------------------- Functions -----------------------------------
 
 def connectMysql(mysqlConfigName):
-	mysqlConfig = ConfigParser.ConfigParser()
+	mysqlConfig = configparser.ConfigParser()
 	try:
 		mysqlConfig.read(mysqlConfigName)
 	except IOError as e:
@@ -75,7 +75,7 @@ def processResultFile (inSBResultsFileName):
 		else:
 			noSBResultCount += 1
 	if len(sbResultDict) == 0:
-		print "No Virulence Results"
+		print("No Virulence Results")
 		sys.exit(0)
 
 	inSBResultFile.close()
@@ -162,7 +162,7 @@ def generateGeneList (sbGeneSetDict, gffTableList):
 	# Dict with gi as key and set of gff entries
 	gffGeneListDict = {}
 	# Loop through the dictionary with sets of genes as the value and GIs as key
-	for sbMarkerGI, sbGeneSet in sbGeneSetDict.iteritems():
+	for sbMarkerGI, sbGeneSet in sbGeneSetDict.items():
 		# Loop through the gene set for the current gi
 		for sbGene in sbGeneSet:
 			# Loop through the GFF table
@@ -195,7 +195,7 @@ def generateKronaPlot(outResultList, prefix):
 
 	doKrona = True
 	if doKrona:
-		print "Generating Krona Plot"
+		print("Generating Krona Plot")
 		runKronaString = "ktImportTaxonomy -o " + prefix + ".krona.html " + outKronaListFile.name
 		subprocess.call(runKronaString.split(' '))
 
@@ -203,7 +203,7 @@ def generateKronaPlot(outResultList, prefix):
 def getGFFInfo (resultList, gffGeneListDict, outGFFList, outCoordsList, idList):
 	(vfclass, vf, vfGene, generaRepresented, vfNumber, resultGI, vfdbInfo, newGeneAccession, genomeSource, taxid,
 	 ncbiComment, resultScore) = resultList
-	for gi, gffEntryList in gffGeneListDict.iteritems():
+	for gi, gffEntryList in gffGeneListDict.items():
 		if gi == resultGI:
 			for gffEntry in gffEntryList:
 				(gffSeqName, gffSource, gffFeature, gffStart, gffStop, gffScore, gffStrand, gffFrame, gffAttributes) = gffEntry
@@ -245,7 +245,7 @@ def getGFFInfo (resultList, gffGeneListDict, outGFFList, outCoordsList, idList):
 
 def printListToFile (outList, prefix):
 	try:
-		print "Writing to file:"+prefix
+		print("Writing to file:"+prefix)
 		outFile = open(prefix, 'w')
 	except IOError as e:
 		exit("ERROR: Could not locate " + e.filename + ". Please make sure it exists.")
@@ -256,7 +256,7 @@ def printListToFile (outList, prefix):
 
 
 def printJsonToFile (jsonDict, prefix):
-	print "Writing to File"+prefix
+	print("Writing to File"+prefix)
 	try:
 		outFile = open(prefix, 'w')
 	except IOError as e:
@@ -316,17 +316,17 @@ def main (args):
                             "order by vftable.VFGenus, vftable.VFClass, vftable.VFGene; ")
 	giTuple = tuple(sbResultDict.keys())
 
-	print "Executing MySQL command to get VF results:"
-	print getResultsFromDB
-	print "Using the following GI's:"
-	print giTuple
+	print("Executing MySQL command to get VF results:")
+	print(getResultsFromDB)
+	print("Using the following GI's:")
+	print(giTuple)
 	mysqlResult = getMysqlResults(mysqlCursor, getResultsFromDB, giTuple)
-	print "Done executing MySQL command"
-	print "Preprocessing results"
+	print("Done executing MySQL command")
+	print("Preprocessing results")
 	knownClassDict = generateKnownClassDict(mysqlResult)
-	print "Done preprocessing results"
+	print("Done preprocessing results")
 
-	print "Processing results"
+	print("Processing results")
 	for resultList in mysqlResult:
 		# Appending score to the result
 		resultGI = str(resultList[5])
@@ -337,8 +337,8 @@ def main (args):
 		# print resultList
 		isNotDuplicate = True
 		if vfclass == "Unknown":
-			for knownClass, knownVFDict in knownClassDict.iteritems():
-				for knownVF, knownVFNumberSet in knownVFDict.iteritems():
+			for knownClass, knownVFDict in knownClassDict.items():
+				for knownVF, knownVFNumberSet in knownVFDict.items():
 					if vfNumber in knownVFNumberSet:
 						isNotDuplicate = False
 					if knownClass in vf:
@@ -375,14 +375,14 @@ def main (args):
 
 			outResultList.append(resultString.split("\t"))
 
-	print "Done processing results"
+	print("Done processing results")
 	if processingType == 'orf':
 		printListToFile (outGFFList, prefix+".gff")
 		printListToFile (outCoordsList, prefix+"_coords.txt")
 	printListToFile (outResultList, prefix+"_table.txt")
 	printJsonToFile(jsonDict, prefix+"_table.json")
 	generateKronaPlot(outResultList, prefix)
-	print "Done"
+	print("Done")
 
 
 def run():

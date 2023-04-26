@@ -60,14 +60,16 @@ my $max_clip=50;
 my $align_trim_bed_file='';
 my $map_quality=42; #default 42, bwa or minimap2 may need use 60
 my $min_indel_candidate_depth=3;  #minimum number gapped reads for indel candidates
-my $max_depth=300; # maximum read depth
+my $max_depth=1000; # maximum read depth
 # varinat filter
 my $min_alt_bases=3;  # minimum number of alternate bases
 my $min_alt_ratio=0.3; #  minimum ratio of alternate bases
 my $min_depth=5; #minimum read depth
 my $snp_gap_filter=3; #SNP within INT bp around a gap to be filtered
 my $ploidy = "";  # default diploid.  other option: haploid
+my $variant_qual= "";
 my $disableBAQ;
+my $align_trim_strand;
 
 
 $ENV{PATH} = "$Bin:$Bin/../bin/:$ENV{PATH}";
@@ -88,17 +90,19 @@ GetOptions(
             'minimap2_options=s'  => \$minimap2_options,
             'pacbio' => \$pacbio,
             'consensus=i' => \$gen_consensus,
-	    'maq=i'    =>  \$map_quality,
+	        'maq=i'    =>  \$map_quality,
             'min_indel_candidate_depth=i' => \$min_indel_candidate_depth,
             'min_alt_bases=i' => \$min_alt_bases,
-	    'min_alt_ratio=f' => \$min_alt_ratio,
+	        'min_alt_ratio=f' => \$min_alt_ratio,
             'max_depth=i' => \$max_depth,
             'min_depth=i' => \$min_depth,
-	    'max_clip=i' => \$max_clip,
-	    'align_trim_bed_file=s' => \$align_trim_bed_file,
+	        'max_clip=i' => \$max_clip,
+	        'align_trim_bed_file=s' => \$align_trim_bed_file,
+            'align_trim_strand' => \$align_trim_strand,
             'snp_gap_filter=i' => \$snp_gap_filter,
-	    'ploidy=s' => \$ploidy,
-	    'disableBAQ' => \$disableBAQ,
+            'variant_qual=i' => \$variant_qual,
+	        'ploidy=s' => \$ploidy,
+	        'disableBAQ' => \$disableBAQ,
             'cpu=i' => \$numCPU,
             'plot_only' => \$plot_only,
             'skip_aln'  => \$skip_aln,
@@ -151,7 +155,8 @@ if ($snap_options =~ /-t\s+\d+/){$snap_options =~ s/-t\s+\d+/-t $numCPU/;}else{$
 my $samtools_threads=$numCPU;
 my $samtools_sort_ram = "-m ".sprintf("%dM", (4000/$numCPU > 768)? 768:4000/$numCPU); # RAM per thread
 
-my $align_trim_pipe_cmd=(-e $align_trim_bed_file )? "| align_trim.py  $align_trim_bed_file  2> /dev/null ":"";
+my $align_trim_strand_flag=($align_trim_strand)? "--strand":"";
+my $align_trim_pipe_cmd=(-e $align_trim_bed_file )? "| align_trim.py $align_trim_strand_flag $align_trim_bed_file  2> /dev/null ":"";
 
 my @bam_outputs;
 for my $ref_file_i ( 0..$#ref_files ){
@@ -161,7 +166,6 @@ for my $ref_file_i ( 0..$#ref_files ){
 	my $bam_index_output = "$outDir/$ref_file_name.sort.bam.bai";
 	push @bam_outputs, $bam_output;
 	unless ($plot_only){  # skip the alignment steps, SNP steps, assume bam and pileup files were generated.
-	unless ($skip_aln){ # skip the alignment steps
 
 	# index reference
 	if ( $aligner =~ /bowtie/i and ! -e "$ref_file.1.bt2"){
@@ -187,6 +191,7 @@ for my $ref_file_i ( 0..$#ref_files ){
 	$ref_files[$ref_file_i]=$ref_file;
 	## index reference sequence 
 	`samtools faidx $ref_file`;
+	unless ($skip_aln and -e "$bam_output"){ # skip the alignment steps
 
 	if ($file_long)
 	{
@@ -198,11 +203,11 @@ for my $ref_file_i ( 0..$#ref_files ){
   		{
      			if ($pacbio){
 				# `bwa bwasw -M -H $pacbio_bwa_option -t $bwa_threads $ref_file $file_long -f $outDir/LongReads$$.sam`;
-				`bwa mem -x pacbio $bwa_options $ref_file $file_long > $outDir/LongReads$$.sam`;
+				`bwa mem -K 10000000 -x pacbio $bwa_options $ref_file $file_long > $outDir/LongReads$$.sam`;
      			}
 			else{
 				#`bwa bwasw -M -H -t $bwa_threads $ref_file $file_long -f $outDir/LongReads$$.sam`;
-				`bwa mem $bwa_options $ref_file $file_long > $outDir/LongReads$$.sam`;
+				`bwa mem -K 10000000 $bwa_options $ref_file $file_long > $outDir/LongReads$$.sam`;
 			}
 		#my $mapped_Long_reads=`awk '\$3 !~/*/ && \$1 !~/\@SQ/ {print \$1}' $tmp/LongReads$$.sam | uniq - | wc -l`;
   		#`echo -e "Mapped_reads_number:\t$mapped_Long_reads" >>$outDir/LongReads_aln_stats.txt`;
@@ -231,7 +236,7 @@ for my $ref_file_i ( 0..$#ref_files ){
 			`bwa sampe -a 100000 $ref_file $tmp/reads_1_$$.sai $tmp/reads_2_$$.sai $file1 $file2 > $outDir/paired$$.sam`;
 		}
 		elsif ($aligner =~ /bwa/i){
-			`bwa mem $bwa_options $ref_file $file1 $file2 > $outDir/paired$$.sam `;
+			`bwa mem -K 10000000 $bwa_options $ref_file $file1 $file2 > $outDir/paired$$.sam `;
 		}
 		elsif ($aligner =~ /snap/i){
 			`snap-aligner paired $ref_file.snap $file1 $file2 -o $outDir/paired$$.sam $snap_options`;
@@ -258,7 +263,7 @@ for my $ref_file_i ( 0..$#ref_files ){
 			`bwa samse -n 50 $ref_file $tmp/singleton$$.sai $singleton > $outDir/singleton$$.sam`;
 		}
 		elsif ($aligner =~ /bwa/i){
-			`bwa mem $bwa_options $ref_file $singleton > $outDir/singleton$$.sam `;
+			`bwa mem -K 10000000 $bwa_options $ref_file $singleton > $outDir/singleton$$.sam `;
 		}
 		elsif($aligner =~ /snap/i){
 			`snap-aligner single $ref_file.snap $singleton -o $outDir/singleton$$.sam $snap_options`;
@@ -343,8 +348,10 @@ for my $ref_file_i ( 0..$#ref_files){
 			my $ploidy_o = ($ploidy =~ /haploid/i)? "--ploidy 1" : "";
 			my $indel_o = ($no_indels)? " -I ":""; 
 			my $baq_o = ($disableBAQ)? " -B ":"";
-			`bcftools mpileup $indel_o $baq_o -A -q $map_quality -d $max_depth -L $max_depth -m $min_indel_candidate_depth -Ov -f $ref_file $bam_output | bcftools call $ploidy_o -M -cO b - > $bcf_output 2>/dev/null`;
-			`bcftools view -v snps,indels,mnps,ref,bnd,other -Ov $bcf_output | vcfutils.pl varFilter -a$min_alt_bases -d$min_depth  > $vcf_output`;
+			my $bcf_filter = ($variant_qual)? " -i \'\%QUAL>=$variant_qual\' ":"";
+			`bcftools mpileup $indel_o $baq_o -A -q $map_quality -d $max_depth -L $max_depth -m $min_indel_candidate_depth -Ov -f $ref_file $bam_output | bcftools call $ploidy_o -mv -O b - > $bcf_output 2>/dev/null`;
+			`bcftools view $bcf_filter -v snps,indels,mnps,ref,bnd,other -Ov $bcf_output | vcfutils.pl varFilter -a$min_alt_bases -d$min_depth  > $vcf_output`;
+			#bcftools view -i '%QUAL>=20' calls.bcf
 		}
 
 		## index BAM file 
@@ -857,6 +864,7 @@ sub fold {
     open (my $out_fh,">$fold_seq_file");
     while(<$in_fh>){
       chomp;
+      $_ =~ s/^>\s+/>/;
       if(/>(\S+)\s*(.*)/)
       {
          if ($seq and length($seq)>$len_cutoff)
@@ -1027,6 +1035,7 @@ Usage: perl $0
 	       -maq                      minimium mapping quality filter [default: 42]
 	       -max_clip                 Maximum clip length to allow. filter [default: 50]
 	       -align_trim_bed_file      provide 6+ column bed file (ex: primer coordinates) for trimming 
+               -align_trim_strand        The strand is taken into account while doing the aligntrim
                -skip_aln                 <bool> skip the alignment steps, assume bam files were generated 
                                          and with proper prefix,outpurDir.  default: off
                -no_plot                  <bool> default: off
@@ -1039,11 +1048,11 @@ Usage: perl $0
 	       -ploidy                   haploid or diploid
                # Variant Filter parameters
 	       -disableBAQ               disableBAQ calculation
-               -max_depth                maximum read depth [300]
+               -max_depth                maximum read depth [1000]
                -min_indel_candidate_depth minimum number gapped reads for indel candidates [3]
                -min_alt_bases            minimum number of alternate bases [3]
                -min_alt_ratio            minimum ratio of alternate bases [0.3]
-               -min_depth                minimum read depth [7]
+               -min_depth                minimum read depth [5]
                -snp_gap_filter           SNP within INT bp around a gap to be filtered [3]
 		 
 

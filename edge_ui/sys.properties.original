@@ -19,6 +19,8 @@ debug=0
 maintenance=0
 ## configure user management system  1: with 0: without
 user_management=1
+## guest account 1: enable, 0: diable
+guest_account=1
 ## if user management system is not in the same domain with edge
 ## ex: http://www.someother.com/userManagement
 edge_user_management_url=http://localhost/userManagement
@@ -29,6 +31,8 @@ user_upload_maxFileSize='1gb'
 user_upload_fileext=fastq,fq,fa,fasta,fna,contigs,gbk,gbff,genbank,bed,hmm,gb,gz,text,config,txt,ini,xls,xlsx,gff,gff3
 ## max user dir size in GB
 user_upload_dir_maxsize=50
+## max user input data size in GB
+user_input_size_maxsize=
 ## download tool use curl or wget
 download_interface=curl
 proxy=

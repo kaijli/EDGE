@@ -109,7 +109,7 @@ r2g_aligner=<TMPL_VAR NAME=edge-r2g-aligner DEFAULT="bwa">
 r2g_aligner_options=<TMPL_VAR NAME=edge-r2g-aligner-options>
 r2g_max_clip=<TMPL_VAR NAME=edge-r2g-max-clip DEFAULT=50>
 r2g_align_trim_bed_file=<TMPL_VAR NAME=edge-r2g-align-trim-bed-file>
-##r2g_min_mapq=<TMPL_VAR NAME=edge-r2g-min-mapQ DEFAULT=42>
+r2g_min_mapq=<TMPL_VAR NAME=edge-r2g-min-mapQ DEFAULT=42>
 window_size=1000
 step_size=200
 reference=<TMPL_VAR NAME=edge-ref-file>
@@ -123,10 +123,15 @@ r2g_consensus_alt_prop=<TMPL_VAR NAME=edge-r2g-con-alt-prop DEFAULT=0.5>
 r2g_consensus_altIndel_prop=<TMPL_VAR NAME=edge-r2g-con-altIndel-prop DEFAULT=0.5>
 r2g_consensus_min_cov=<TMPL_VAR NAME=edge-r2g-con-min-cov DEFAULT=5>
 r2g_consensus_min_baseQ=<TMPL_VAR NAME=edge-r2g-con-min-baseQ DEFAULT=20>
-r2g_consensus_disable_BAQ=<TMPL_VAR NAME=edge-r2g-con-disableBAQ DEFAULT=0>
+r2g_consensus_disable_BAQ=<TMPL_VAR NAME=edge-r2g-con-disableBAQ DEFAULT=1>
 r2g_consensus_pcr_dedup=<TMPL_VAR NAME=edge-r2g-con-pcrdedup DEFAULT=1>
+r2g_consensus_homopolymer_filter=<TMPL_VAR NAME=edge-r2g-con-homopolymer-filter DEFAULT=0>
+r2g_consensus_strandbias_filter=<TMPL_VAR NAME=edge-r2g-con-strandbias-filter DEFAULT=0>
+r2g_consensus_comp_opt=<TMPL_VAR NAME=edge-r2g-con-comp-opt DEFAULT=0>
+r2g_consensus_varlog_opt=<TMPL_VAR NAME=edge-r2g-con-varlog-opt DEFAULT=0>
 r2g_variant_call=<TMPL_VAR NAME=edge-r2g-variantcall-sw DEFAULT=1>
-r2g_variant_call_ploidy=<TMPL_VAR NAME=edge-r2g-variantcall-ploidy DEFAULT="haploid">
+r2g_variant_call_min_qual=<TMPL_VAR NAME=edge-r2g-variantcall-min-qual DEFAULT=60>
+r2g_variant_call_ploidy=<TMPL_VAR NAME=edge-r2g-variantcall-ploidy DEFAULT="diploid">
 
 [Reads Taxonomy Classification]
 ## boolean, 1=yes, 0=no
@@ -178,7 +183,10 @@ contig_size_cut_for_annotation=<TMPL_VAR NAME=edge-anno-size-cut DEFAULT=700>
 annotateProgram=<TMPL_VAR NAME=edge-anno-tool DEFAULT=prokka>
 ## provide SourceGBK for RATT to transfer annotation
 annotateSourceGBK=<TMPL_VAR NAME=edge-anno-source-file>
+annotation_gcode=<TMPL_VAR NAME=edge-anno-gcode DEFAULT=11>
 customHMM=<TMPL_VAR NAME=edge-anno-hmm-file>
+customProtein=<TMPL_VAR NAME=edge-anno-protein-file>
+annotation_evalue=<TMPL_VAR NAME=edge-anno-evalue DEFAULT=1e-09>
 DoKeggOmicsView=<TMPL_VAR NAME=edge-anno-kegg-sw DEFAULT=1>
 
 [ProPhage Detection]
@@ -194,13 +202,17 @@ antismash-knownclusterblast=<TMPL_VAR NAME=antismash-knownclusterblast>
 antismash-smcogs=<TMPL_VAR NAME=antismash-smcogs>
 antismash-asf=<TMPL_VAR NAME=antismash-asf>
 antismash-fullhmm=<TMPL_VAR NAME=antismash-fullhmm>
+antismash-mibig=<TMPL_VAR NAME=antismash-mibig>
+antismash-pfam2go=<TMPL_VAR NAME=antismash-pfam2go>
+antismash-rre=<TMPL_VAR NAME=antismash-rre>
+antismash-tigrfam=<TMPL_VAR NAME=antismash-tigrfam>
 antismash-cassis=<TMPL_VAR NAME=antismash-cassis>
-antismash-tta=<TMPL_VAR NAME=antismash-tta>
-antismash-borderpredict=<TMPL_VAR NAME=antismash-borderpredict>
-antismash-inclusive=<TMPL_VAR NAME=antismash-inclusive>
-antismash-inclusive-cdsnr=<TMPL_VAR NAME=antismash-inclusive-cdsnr DEFAULT=5>
-antismash-inclusive-threshold=<TMPL_VAR NAME=antismash-inclusive-threshold DEFAULT=0.6>
-antismash-inclusive-npfams=<TMPL_VAR NAME=antismash-inclusive-npfams DEFAULT=5>
+## antismash-tta=<TMPL_VAR NAME=antismash-tta>
+## antismash-borderpredict=<TMPL_VAR NAME=antismash-borderpredict>
+## antismash-inclusive=<TMPL_VAR NAME=antismash-inclusive>
+## antismash-inclusive-cdsnr=<TMPL_VAR NAME=antismash-inclusive-cdsnr DEFAULT=5>
+## antismash-inclusive-threshold=<TMPL_VAR NAME=antismash-inclusive-threshold DEFAULT=0.6>
+## antismash-inclusive-npfams=<TMPL_VAR NAME=antismash-inclusive-npfams DEFAULT=5>
 </TMPL_IF>
 
 [Contigs Binning]
@@ -267,8 +279,8 @@ top=<TMPL_VAR NAME=edge-primer-adj-num DEFAULT=5>
 </TMPL_IF>
 
 [Generate JBrowse Tracks]
-DoJBrowse=<TMPL_VAR NAME=edge-jbroswe-sw DEFAULT=1>
-JBrowse_bam_min_depth=<TMPL_VAR NAME=edge-jbroswe-min-depth DEFAULT=300>
+DoJBrowse=<TMPL_VAR NAME=edge-jbrowse-sw DEFAULT=1>
+JBrowse_bam_min_depth=<TMPL_VAR NAME=edge-jbrowse-min-depth DEFAULT=300>
 
 <TMPL_IF NAME=edge-qiime-sw>
 [Qiime analysis]

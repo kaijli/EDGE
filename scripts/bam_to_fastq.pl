@@ -42,8 +42,8 @@ open (my $pair2_fh, ">$prefix.2.fastq");
 open (my $se_fh, ">$prefix.se.fastq");
 my $sortName_sam_file = "unmapped$$.sam";
 $mapped_ref_id = "\"$mapped_ref_id\"" if ($mapped_ref_id);
-system("samtools sort -l 0 -T $workingDir -n -@ $cpu $file 2>/dev/null | samtools view -@ $cpu $samtools_flag - $mapped_ref_id  > $sortName_sam_file");
-#system("samtools view $samtools_flag $file $mapped_ref_id | sort -T $workingDir -k 1,1 > $sortName_sam_file");
+#system("samtools sort -l 0 -T $workingDir -n -@ $cpu $file 2>/dev/null | samtools view -@ $cpu $samtools_flag - $mapped_ref_id  > $sortName_sam_file");
+system("samtools view $samtools_flag $file $mapped_ref_id | sort -T $workingDir -k 1,1 > $sortName_sam_file");
 open (IN, $sortName_sam_file) or die $!;
 my $p1_count=0;
 my $p2_count=0;
@@ -58,12 +58,12 @@ while(<IN>)
   my ($front_soft_clip_num, $end_soft_clip_num) = (0,0);
   if ($CIGAR =~ /^(\d+)S/) { $front_soft_clip_num = $1;}
   if ($CIGAR =~ /(\d+)S$/) { $end_soft_clip_num = $1;}
+  next if ($opt_passfilter and ($array[1] & 512));
+  next if ($array[1] & 3840); # not primary / supplementary / PCR or optical duplicate / fails platform/vendor quality checks
   if ($remove_soft_clip){
 	$seq = substr $array[9], $front_soft_clip_num, length($array[9]) - $front_soft_clip_num - $end_soft_clip_num;
 	$q_seq = substr $array[10], $front_soft_clip_num, length($array[10]) - $front_soft_clip_num - $end_soft_clip_num;
   }
-  next if ($opt_passfilter and ($array[1] & 512));
-  next if ($array[1] & 3840); # not primary / supplementary / PCR or optical duplicate / fails platform/vendor quality checks
   if ($in_offset != $out_offset)
   {
      $q_seq=&quality_conversion($q_seq,$in_offset,$out_offset);

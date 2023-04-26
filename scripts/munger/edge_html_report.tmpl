@@ -291,6 +291,7 @@
 					</div>
 				</div>
 				<TMPL_ELSE>
+				<TMPL_UNLESS NAME="PACBIODATA">
 				<div class="ui-grid-c ui-responsive edge-report-plots">
 					<div class="ui-block-a">
 						<span class="iframe_label">Quality Report <a data-ajax='false' href='<TMPL_VAR NAME=OUTPUTDIR DEFAULT=->/HTML_Report/images/QC_quality_report.png'>[full]</a></span>
@@ -311,6 +312,7 @@
 						<a href="#popup-general" data-rel="popup" data-position-to="window" data-transition="fade"><img class="preview_img" data-src="<TMPL_VAR NAME=OUTPUTDIR DEFAULT=->/HTML_Report/images/QC_quality_boxplot.png" alt="QC_quality_report"></a>
 					</div>
 				</div>
+				</TMPL_UNLESS>
 				</TMPL_IF>
 				</TMPL_IF>
 			</div>
@@ -615,7 +617,7 @@
 			<TMPL_IF NAME="OUT_R2G_SW">
 				<li id="r2gTag"><span class="li-report-content-title">Reads Mapped to Reference(s)</span><div class="li-report-content">
 					<ol>
-						<li><span class="li-report-content-title">Mapped Reads</span><div class="li-report-content">
+						<li><span class="li-report-content-title">Mapped Reads By <TMPL_VAR NAME=RMREFALIGNER></span><div class="li-report-content">
 							<!--<table data-role='table' class='output-table output-table-twocol ui-responsive'>
 							  <thead>
 								<tr>
@@ -660,7 +662,7 @@
 								  <th data-priority='5'>Gap bases</th>
 								  </TMPL_UNLESS>
 							          <TMPL_IF NAME=RMREFVARCALL>
-								  <th data-priority='4'>SNPs</th>
+								  <th data-priority='4'>SNVs</th>
 								  <th data-priority='4'>INDELs</th>
 							          </TMPL_IF>
 								</tr>
@@ -733,7 +735,10 @@
 								|<a data-ajax='false' href='<TMPL_VAR NAME=OUTPUTDIR DEFAULT=->/ReadsBasedAnalysis/readsMappingToRef/readsToRef_plots.pdf'> All Plots PDF </a>
 
 								<TMPL_IF NAME="RMREFSNPFILE">
-								|<a data-ajax='false' href='<TMPL_VAR NAME=OUTPUTDIR DEFAULT=->/ReadsBasedAnalysis/readsMappingToRef/readsToRef.SNPs_report.txt'> SNP Report </a>
+								|<a href='#edge-output-datatables-dialog' class='edge-output-datatables'      data-rel='popup' data-position-to="window" data-src='<TMPL_VAR NAME=OUTPUTDIR DEFAULT=->/ReadsBasedAnalysis/readsMappingToRef/readsToRef.SNPs_report.json'> SNV Report </a>
+								</TMPL_IF>
+								<TMPL_IF NAME="RMREFINDELFILE">
+								|<a href='#edge-output-datatables-dialog' class='edge-output-datatables'      data-rel='popup' data-position-to="window" data-src='<TMPL_VAR NAME=OUTPUTDIR DEFAULT=->/ReadsBasedAnalysis/readsMappingToRef/readsToRef.Indels_report.json'> INDELs Report </a>
 								</TMPL_IF>
 								<TMPL_IF NAME="RMREFGAPFILE">
 								|<a href='#edge-output-datatables-dialog' class='edge-output-datatables'      data-rel='popup' data-position-to="window" data-src='<TMPL_VAR NAME=OUTPUTDIR DEFAULT=->/ReadsBasedAnalysis/readsMappingToRef/GapVSReference.report.json'> Gap Table </a>
@@ -2200,6 +2205,7 @@
 								</div>
 							</div>
 							<p class='extra-text-link'>Link to
+							|<a data-ajax='false' href='<TMPL_VAR NAME=PIRET_OUT_PROCESSLOG DEFAULT=->'> process.log </a>
 							|<a href='#edge-outputfile-dialog' class='edge-outputfile-tree' data-rel='popup' dir-src='<TMPL_VAR NAME=OUTPUTDIR>/ReferenceBasedAnalysis/Piret/processes/edgeR/eukarya'> Directory </a>
 							</p>
 						</div></li> <!--edgeR #Euk-->
@@ -2443,6 +2449,7 @@
 								</div>
 							</div>
 							<p class='extra-text-link'>Link to
+							|<a data-ajax='false' href='<TMPL_VAR NAME=PIRET_OUT_PROCESSLOG DEFAULT=->'> process.log </a>
 							|<a href='#edge-outputfile-dialog' class='edge-outputfile-tree' data-rel='popup' dir-src='<TMPL_VAR NAME=OUTPUTDIR>/ReferenceBasedAnalysis/Piret/processes/DESeq2/eukarya'> Directory </a>
 							</p>
 						</div></li><!--DESeq2 # EUK-->

@@ -261,7 +261,7 @@ sub readBatchInput {
 		&returnStatus();
 	}
 	
-	my $path_to_script = "$EDGE_HOME/thirdParty/Anaconda2/bin/xlsx2csv";
+	my $path_to_script = "$EDGE_HOME/thirdParty/Mambaforge/bin/xlsx2csv";
 	open (my $fh, "-|") 
 	  or exec ("$path_to_script","-d","tab","$excel_file");
 
@@ -273,7 +273,9 @@ sub readBatchInput {
 	my @header = split /\t/,$head;
 	if ($head !~ /project/i){
 		&addMessage("PARAMS","edge-batch-input-excel","Incorrect batch file");
+		&returnStatus();
 	}else{
+		my %dup;
 		while (my $test=<$fh>){
 			chomp $test; 
 			next if ($test =~ /None/);
@@ -286,6 +288,13 @@ sub readBatchInput {
 				$data[$i] =~ s/\.\.\///g;
 				my $key = lc($header[$i]);
 				$list->{$data[0]}->{"$key"}=$data[$i];
+				if ($dup{$data[0]}){
+					&addMessage("PARAMS","edge-batch-input-excel","Duplicate project name found, $data[0]");
+					&returnStatus();
+				}
+				else{
+					$dup{$data[0]} = 1
+				}
 			}
 		}
 	}
@@ -370,6 +379,7 @@ sub createConfig {
 		my $pname = $pnames[$i];
 		my $config_out = "$out_dir/$pname/config.txt";
 		my $json_out   = "$out_dir/$pname/config.json";
+		my $projCode = $projlist->{$pname}->{projCode};
 		$config_out = "$out_dir/" . $projlist->{$pname}->{projCode} . "/config.txt" if ($username && $password);
 		$json_out   = "$out_dir/" . $projlist->{$pname}->{projCode} . "/config.json" if ($username && $password);
 		
@@ -412,6 +422,9 @@ sub createConfig {
 					elsif( $line =~ /^projid=/ ){
 						$line =~ s/^projid=.*/projid=$pname/;
 					}
+					elsif( $line =~ /^projcode=/ ){
+						$line =~ s/^projcode=.*/projcode=$projCode/;
+					}
 					$line =~ s/[`;]//g;
 					&addMessage("GENERATE_CONFIG","failure","Invalid config") if ($line =~ /\.\.\//);
 					print CFG_OUT "$line\n";
@@ -449,6 +462,13 @@ sub createConfig {
 				$opt{"edge-proj-name"} = $projlist->{$pname}->{"REALNAME"}||$pname  ;
 				$opt{"edge-ref-file"} = $projlist->{$pname}->{"reference"} if ($projlist->{$pname}->{"reference"});
 				$opt{"edge-ref-sw"} = 1 if ($projlist->{$pname}->{"reference"});
+				if ($projlist->{$pname}->{"platform"} =~ /nanopore|minion/i ){
+					$opt{"edge-fastq-source"} = "nanopore";
+				} elsif ($projlist->{$pname}->{"platform"} =~ /pacbio/i){
+					$opt{"edge-fastq-source"} = "pacbio";
+				} elsif ($projlist->{$pname}->{"platform"} =~ /illumina/i) {
+					$opt{"edge-fastq-source"} = "illumina";
+				}
 				if ($projlist->{$pname}->{"sra"}){
 					$opt{"edge-sra-acc"} = uc $projlist->{$pname}->{"sra"};
 					$opt{"edge-sra-sw"} = 1;
@@ -460,27 +480,32 @@ sub createConfig {
 						$opt{"splitrim-minq"}= 7 ;
 						$opt{"edge-r2g-max-clip"}= 150;
 						$opt{"edge-r2g-con-min-baseQ"}= 5;
-						$opt{"edge-r2g-con-altIndel-prop"} = 0.8 ;
+						$opt{"edge-r2g-con-altIndel-prop"} = 0.6 ;
 						$opt{"edge-r2g-con-disableBAQ"}= 1 ;
+						$opt{"edge-r2g-con-homopolymer-filter"}= 1;
+						$opt{"edge-r2g-con-strandbias-filter"}= 1;
 						$opt{"edge-r2g-aligner"} = 'minimap2' ;
 						$opt{"edge-r2c-aligner"} = 'minimap2' ;
 						$opt{"edge-assembler"} = 'lrasm' ;
 						$opt{"edge-r2g-variantcall-sw"} = 0;
 						$opt{"edge-lrasm-preset"} = "ont";
 						if( $sra_info->{$real_names[$i]}->{"metadata-sequencer"} =~ /pacbio/i){
+							$opt{"edge-fastq-source"} = "pacbio";
 							$opt{"edge-r2c-aligner-options"} = "-x map-pb";
 							$opt{"edge-r2g-aligner-options"} = "-x map-pb";
 							$opt{"edge-lrasm-preset"} = "pb";
+							$opt{"edge-r2g-con-strandbias-filter"}= 0;
+							$opt{"edge-qc-sw"} = 0;
 						}
 					}else{ # illumina
-						$opt{"edge-fastq-source"} = "not";
+						$opt{"edge-fastq-source"} = "illumina";
 						$opt{"edge-qc-minl"} = 50;
 						$opt{"edge-qc-q"} = 20;
 						$opt{"splitrim-minq"}= 20 ;
 						$opt{"edge-r2g-max-clip"}= 50;
 						$opt{"edge-r2g-con-min-baseQ"}= 20;
 						$opt{"edge-r2g-con-altIndel-prop"} = 0.5 ;
-						$opt{"edge-r2g-con-disableBAQ"}= 0 ;
+						$opt{"edge-r2g-con-disableBAQ"}= 1 ;
 						$opt{"edge-r2g-aligner"} = 'bwa' ;
 						$opt{"edge-r2c-aligner"} = 'bwa' ;
 						$opt{"edge-assembler"} = 'idba_ud' if $opt{"edge-assembler"} eq 'lrasm' ; 
@@ -848,6 +873,12 @@ sub checkParams {
 		foreach my $pname (keys %{$projlist}){
 			$projlist->{$pname}->{"q1"} = "$input_dir/$projlist->{$pname}->{'q1'}" if ($projlist->{$pname}->{"q1"} =~ /^\w/ && $projlist->{$pname}->{"q1"} !~ /^http|ftp/i);
 			$projlist->{$pname}->{"q2"} = "$input_dir/$projlist->{$pname}->{'q2'}" if ($projlist->{$pname}->{"q2"} =~ /^\w/ && $projlist->{$pname}->{"q2"} !~ /^http|ftp/i);
+			if ( $projlist->{$pname}->{"q1"} and ! $projlist->{$pname}->{"q2"}){
+				&addMessage("PARAMS","edge-batch-input-excel","Paired end data need both q1 and q2 of $pname.") ;
+			}
+			if ( ! $projlist->{$pname}->{"q1"} and $projlist->{$pname}->{"q2"}){
+				&addMessage("PARAMS","edge-batch-input-excel","Paired end data need both q1 and q2 of $pname.") ;
+			}
 			$projlist->{$pname}->{"reference"} = "$input_dir/$projlist->{$pname}->{'reference'}" if ($projlist->{$pname}->{"reference"} =~ /^\w/ && $projlist->{$pname}->{"reference"} !~ /^http|ftp/i);
 			my @single_files = split(/,/,$projlist->{$pname}->{"s"});
 			foreach my $i (0..$#single_files){
@@ -1029,7 +1060,7 @@ sub checkParams {
 		$opt{"edge-primer-valid-sw"} = 0 ;
 		$opt{"edge-primer-adj-sw"} = 0 ;
 		$opt{"edge-anno-sw"} = 0 ;
-		$opt{"edge-jbroswe-sw"} = 0 ;
+		$opt{"edge-jbrowse-sw"} = 0 ;
 		my @chartTypes=split /[\x0]/, $opt{"edge-qiime-taxa-charttype"};
 		$opt{"edge-qiime-taxa-charttype"} = join(",", @chartTypes);
 		@edge_qiime_barcode_input = split /[\x0]/, $opt{"edge-qiime-barcode-fq-file-input[]"} if defined $opt{"edge-qiime-barcode-fq-file-input[]"};
@@ -1079,7 +1110,7 @@ sub checkParams {
 		$opt{"edge-primer-valid-sw"} = 0 ;
 		$opt{"edge-primer-adj-sw"} = 0 ;
 		$opt{"edge-anno-sw"} = 0 ;
-		$opt{"edge-jbroswe-sw"} = 0 ;
+		$opt{"edge-jbrowse-sw"} = 0 ;
 		$opt{"edge-targetedngs-ref-file"} = $input_dir."/".$opt{"edge-targetedngs-ref-file"} if ($opt{"edge-targetedngs-ref-file"} =~ /^\w/);
         
 		&addMessage("PARAMS", "edge-targetedngs-ref-file","File not found. Please check the file path.") if ( $opt{"edge-targetedngs-ref-file"} && ! -e $opt{"edge-targetedngs-ref-file"} );
@@ -1111,7 +1142,7 @@ sub checkParams {
 		$opt{"edge-primer-valid-sw"} = 0 ;
 		$opt{"edge-primer-adj-sw"} = 0 ;
 		$opt{"edge-anno-sw"} = 0 ;
-		$opt{"edge-jbroswe-sw"} = 0 ;
+		$opt{"edge-jbrowse-sw"} = 0 ;
 		$opt{"edge-piret-exp-design-file"} = ($edge_qiime_mapping_files[0] =~ /^\w/)? $input_dir."/".$edge_qiime_mapping_files[0] : $edge_qiime_mapping_files[0];
 		$opt{"edge-piret-prok-fasta-file"} = $input_dir."/".$opt{"edge-piret-prok-fasta-file"} if ($opt{"edge-piret-prok-fasta-file"} =~ /^\w/);
 		$opt{"edge-piret-prok-gff-file"} = $input_dir."/".$opt{"edge-piret-prok-gff-file"} if ($opt{"edge-piret-prok-gff-file"} =~ /^\w/);
@@ -1248,6 +1279,14 @@ sub checkParams {
 		&addMessage("PARAMS", "edge-primer-adj-len-min", "Invalid input. Natural number required.") unless $opt{"edge-primer-adj-len-min"} =~ /^\d+$/;
 		&addMessage("PARAMS", "edge-primer-adj-len-opt", "Invalid input. Length is not in the range.") if $opt{"edge-primer-adj-len-opt"} > $opt{"edge-primer-adj-len-max"} || $opt{"edge-primer-adj-len-opt"} < $opt{"edge-primer-adj-len-min"};
 	}
+	if ($opt{"edge-pp-sw"}){
+		$opt{"edge-r2g-align-trim-bed-file"} = $input_dir."/".$opt{"edge-r2g-align-trim-bed-file"} if ($opt{"edge-r2g-align-trim-bed-file"} =~ /^\w/);
+ 		&addMessage("PARAMS", "edge-r2g-align-trim-bed-file",    "File not found. Please check the file path.") if ( $opt{"edge-r2g-align-trim-bed-file"} && ! -e $opt{"edge-r2g-align-trim-bed-file"} );
+ 		&addMessage("PARAMS", "edge-r2g-align-trim-bed-file",  "Invalid input. BED6+ format required") if ( -e $opt{"edge-r2g-align-trim-bed-file"} and ! is_bed6_plus($opt{"edge-r2g-align-trim-bed-file"}) );
+ 		if ($opt{"edge-qc-adapter"} && $opt{"edge-r2g-align-trim-bed-file"}){
+ 			&addMessage("PARAMS", "edge-r2g-align-trim-bed-file",  "Please provide either FASTA file or BED file. Not Both.");
+ 		}
+	}
 	if ( $opt{"edge-qc-sw"} ){
 		&addMessage("PARAMS", "edge-qc-q",          "Invalid input. Natural number required.")     unless $opt{"edge-qc-q"}    =~ /^\d+$/;
 		&addMessage("PARAMS", "edge-qc-avgq",       "Invalid input. Natural number required.")     unless $opt{"edge-qc-avgq"} =~ /^\d+$/;
@@ -1260,12 +1299,6 @@ sub checkParams {
 		&addMessage("PARAMS", "edge-qc-5end",       "Invalid input. Natural number required.")     unless $opt{"edge-qc-5end"} =~ /^\d+$/;
 		&addMessage("PARAMS", "edge-qc-3end",       "Invalid input. Natural number required.")     unless $opt{"edge-qc-3end"} =~ /^\d+$/;
 		&addMessage("PARAMS", "edge-qc-adapter",    "Invalid input. Fasta format required") if ( -e $opt{"edge-qc-adapter"} and ! is_fasta($opt{"edge-qc-adapter"}) );
-		$opt{"edge-r2g-align-trim-bed-file"} = $input_dir."/".$opt{"edge-r2g-align-trim-bed-file"} if ($opt{"edge-r2g-align-trim-bed-file"} =~ /^\w/);
- 		&addMessage("PARAMS", "edge-r2g-align-trim-bed-file",    "File not found. Please check the file path.") if ( $opt{"edge-r2g-align-trim-bed-file"} && ! -e $opt{"edge-r2g-align-trim-bed-file"} );
- 		&addMessage("PARAMS", "edge-r2g-align-trim-bed-file",  "Invalid input. BED6+ format required") if ( -e $opt{"edge-r2g-align-trim-bed-file"} and ! is_bed6_plus($opt{"edge-r2g-align-trim-bed-file"}) );
- 		if ($opt{"edge-qc-adapter"} && $opt{"edge-r2g-align-trim-bed-file"}){
- 			&addMessage("PARAMS", "edge-r2g-align-trim-bed-file",  "Please provide either FASTA file or BED file. Not Both.");
- 		}
 	}
 	if ( $opt{"edge-joinpe-sw"}){
 		&addMessage("PARAMS", "edge-joinpe-maxdiff",     "Invalid input. Natural number required and Less than 100")  unless $opt{"edge-joinpe-maxdiff"} =~ /^\d+$/ && $opt{"edge-joinpe-maxdiff"} <= 100;
@@ -1301,10 +1334,15 @@ sub checkParams {
 		&addMessage("PARAMS", "edge-assembly-sw",  "You must turn on assembly function to do annotation.") unless $opt{"edge-assembly-sw"} >= 0; 
 		#&addMessage("PARAMS", "edge-anno-kingdom",  "Invalid input. Natural number required.")     unless $opt{"edge-assembly-mink"} >= 0; 	
 		$opt{"edge-anno-hmm-file"}  = $input_dir."/".$opt{"edge-anno-hmm-file"} if ( $opt{"edge-anno-hmm-file"} =~ /^\w/);
+		$opt{"edge-anno-protein-file"}  = $input_dir."/".$opt{"edge-anno-protein-file"} if ( $opt{"edge-anno-protein-file"} =~ /^\w/);
 		if ($opt{"edge-anno-tool"} =~ /RATT/){
 			 $opt{"edge-anno-source-file"}  = $input_dir."/".$opt{"edge-anno-source-file"} if ( $opt{"edge-anno-source-file"} =~ /^\w/);
 			&addMessage("PARAMS","edge-anno-source-file","File not found. Please provide the Genbank Source File") if ( ! $opt{"edge-anno-source-file"} );
 			&addMessage("PARAMS","edge-anno-source-file","Invalid input. Genbank format required") if ( -e $opt{"edge-anno-source-file"} && ! is_genbank($opt{"edge-anno-source-file"}) );
+		}
+		$opt{"edge-anno-evalue"} =~ s/\s+//g;
+		if ($opt{"edge-anno-evalue"} =~ /[^0-9e\-\. ]/){
+			&addMessage("PARAMS","edge-anno-evalue","Invalid input. Please use E Notation (ex: 1e-09) or float number");
 		}
 	}
 	if ( $opt{"edge-blast-sw"} ){
@@ -1364,7 +1402,7 @@ sub parse_qiime_mapping_files{
 		$f =~ s/[`';"]//g;
 		if ($f =~ /xlsx$/){
 			open ($fh, "-|")
-				or exec("$EDGE_HOME/thirdParty/Anaconda2/bin/xlsx2csv", "-d", "tab", "$f");
+				or exec("$EDGE_HOME/thirdParty/Mambaforge/bin/xlsx2csv", "-d", "tab", "$f");
 		}else{
 			open ($fh,"<", "$f") or die "Cannot read $f\n";
 		}
@@ -1650,7 +1688,19 @@ sub getSRAmetaData{
 	$acc =~ s/\s+//g;
 	my $proxy = $ENV{HTTP_PROXY} || $ENV{http_proxy} || $sys->{proxy};
 	$proxy = "--proxy \'$proxy\' " if ($proxy);
-	my $url = "https://trace.ncbi.nlm.nih.gov/Traces/sra/sra.cgi?save=efetch&db=sra&rettype=runinfo&term=$acc";
+	my $url0 = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=sra&term=$acc&usehistory=y";
+	my $cmd0 = ($sys->{'download_interface'} =~ /curl/i)?"curl -A \"Mozilla/5.0\" -L $proxy \"$url0\" 2>/dev/null":"wget -v -U \"Mozilla/5.0\" -O - \"$url0\" 2>/dev/null";
+	my $webenv;
+	my $key;
+	my $SRA_fh0;
+	my $pid = open ($SRA_fh0, "-|")
+		or exec($cmd0);
+	while(my $line=<$SRA_fh0>){
+		$webenv = $1 if ( $line =~ /<WebEnv>(\S+)<\/WebEnv>/);
+		$key = $1 if ($line =~ /<QueryKey>(\S+)<\/QueryKey>/);
+	}
+	my $url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=sra&rettype=runinfo&query_key=$key&WebEnv=$webenv&retmode=text";
+
 	my $cmd = ($sys->{'download_interface'} =~ /curl/i)?"curl -A \"Mozilla/5.0\" -L $proxy \"$url\" 2>/dev/null":"wget -v -U \"Mozilla/5.0\" -O - \"$url\" 2>/dev/null";
 	my $SRA_fh;
 	my $pid = open ($SRA_fh, "-|")
